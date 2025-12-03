@@ -2,18 +2,24 @@ import { ElementA11yParameterError } from 'storybook/internal/preview-errors';
 
 import { global } from '@storybook/global';
 
-import type { AxeResults, ContextProp, ContextSpec } from 'axe-core';
+import type { AxeResults } from 'axe-core';
 import { addons, waitForAnimations } from 'storybook/preview-api';
 
 import { withLinkPaths } from './a11yRunnerUtils';
 import { EVENTS } from './constants';
+import { EngineRegistry } from './engines/EngineRegistry';
+import type { A11yContext, A11yEngineConfig, A11yEngineType, A11yReport } from './engines/types';
 import type { A11yParameters } from './params';
 
 const { document } = global;
 
 const channel = addons.getChannel();
 
-const DEFAULT_PARAMETERS = { config: {}, options: {} } as const;
+const DEFAULT_PARAMETERS: A11yParameters = {
+  engine: 'axe-core' as A11yEngineType,
+  config: {},
+  options: {},
+};
 
 const DISABLED_RULES = [
   // In component testing, landmarks are not always present
@@ -40,23 +46,25 @@ const runNext = async () => {
   runNext();
 };
 
-export const run = async (input: A11yParameters = DEFAULT_PARAMETERS, storyId: string) => {
-  const axeCore = await import('axe-core');
-  // We do this workaround when Vite projects can't optimize deps in pnpm projects
-  // as axe-core is UMD and therefore won't resolve.
-  // In that case, we just use the global axe (which will be there as a side effect of UMD import).
-  const axe = axeCore?.default || (globalThis as any).axe;
-
-  const { config = {}, options = {} } = input;
-
+export const run = async (
+  input: A11yParameters = DEFAULT_PARAMETERS,
+  storyId: string
+): Promise<A11yReport | AxeResults> => {
   // @ts-expect-error - the whole point of this is to error if 'element' is passed
   if (input.element) {
     throw new ElementA11yParameterError();
   }
 
-  const context: ContextSpec = {
+  // Determine which engine to use (default to axe-core for backward compatibility)
+  const engineType = (input.engine || 'axe-core') as A11yEngineType;
+
+  // Get or initialize the engine
+  const engine = await EngineRegistry.getOrInitialize(engineType);
+
+  // Prepare context
+  const context: A11yContext = {
     include: document?.body,
-    exclude: ['.sb-wrapper', '#storybook-docs', '#storybook-highlights-root'], // Internal Storybook elements that are always in the document
+    exclude: ['.sb-wrapper', '#storybook-docs', '#storybook-highlights-root'],
   };
 
   if (input.context) {
@@ -71,28 +79,61 @@ export const run = async (input: A11yParameters = DEFAULT_PARAMETERS, storyId: s
 
     // 1. if context.include exists, use it
     if (hasInclude) {
-      context.include = (input.context as any).include as ContextProp;
+      context.include = (input.context as any).include;
     } else if (!hasInclude && !hasExclude) {
-      // 2. if context exists, but it's not an object with include or exclude, it's an implicit include to be used directly
-      context.include = input.context as ContextProp;
+      // 2. if context exists, but it's not an object with include or exclude, it's an implicit include
+      context.include = input.context as any;
     }
 
     // 3. if context.exclude exists, merge it with the default exclude
     if (hasExclude) {
-      context.exclude = (context.exclude as any).concat((input.context as any).exclude);
+      const userExclude = (input.context as any).exclude;
+      context.exclude = Array.isArray(userExclude)
+        ? [...(context.exclude as string[]), ...userExclude]
+        : [...(context.exclude as string[]), userExclude];
     }
   }
 
-  axe.reset();
+  // Prepare configuration
+  const config: A11yEngineConfig = input.config || {};
 
-  const configWithDefault = {
-    ...config,
-    rules: [...DISABLED_RULES.map((id) => ({ id, enabled: false })), ...(config?.rules ?? [])],
-  };
+  // Handle legacy axe-core configuration for backward compatibility
+  if (engineType === 'axe-core') {
+    // Add default disabled rules for axe-core
+    if (!config.rules) {
+      config.rules = {};
+    }
+    for (const ruleId of DISABLED_RULES) {
+      if (!(ruleId in config.rules)) {
+        config.rules[ruleId] = { enabled: false };
+      }
+    }
 
-  axe.configure(configWithDefault);
+    // Handle legacy options parameter
+    if (input.options) {
+      config.engineOptions = {
+        ...config.engineOptions,
+        ...input.options,
+      };
+    }
 
-  return new Promise<AxeResults>((resolve, reject) => {
+    // Handle legacy config parameter (axe-core specific format)
+    if ((input as any).config?.rules) {
+      const legacyRules = (input as any).config.rules;
+      if (Array.isArray(legacyRules)) {
+        for (const rule of legacyRules) {
+          if (rule.id) {
+            config.rules[rule.id] = {
+              enabled: rule.enabled !== false,
+              options: rule,
+            };
+          }
+        }
+      }
+    }
+  }
+
+  return new Promise<A11yReport | AxeResults>((resolve, reject) => {
     const highlightsRoot = document?.getElementById('storybook-highlights-root');
     if (highlightsRoot) {
       highlightsRoot.style.display = 'none';
@@ -100,11 +141,23 @@ export const run = async (input: A11yParameters = DEFAULT_PARAMETERS, storyId: s
 
     const task = async () => {
       try {
-        const result = await axe.run(context, options);
-        const resultWithLinks = withLinkPaths(result, storyId);
-        resolve(resultWithLinks);
+        const result = await engine.run(context, config);
+
+        // For axe-core, maintain backward compatibility by adding link paths
+        if (engineType === 'axe-core') {
+          // Convert to AxeResults format for backward compatibility
+          const axeResult = convertToAxeResults(result);
+          const resultWithLinks = withLinkPaths(axeResult, storyId);
+          resolve(resultWithLinks);
+        } else {
+          resolve(result);
+        }
       } catch (error) {
         reject(error);
+      } finally {
+        if (highlightsRoot) {
+          highlightsRoot.style.display = '';
+        }
       }
     };
 
@@ -113,12 +166,61 @@ export const run = async (input: A11yParameters = DEFAULT_PARAMETERS, storyId: s
     if (!isRunning) {
       runNext();
     }
-
-    if (highlightsRoot) {
-      highlightsRoot.style.display = '';
-    }
   });
 };
+
+/** Convert normalized A11yReport back to AxeResults format for backward compatibility */
+function convertToAxeResults(report: A11yReport): AxeResults {
+  return {
+    url: report.url || '',
+    timestamp: new Date(report.timestamp).toISOString(),
+    testEngine: {
+      name: report.engine,
+      version: report.metadata.engineVersion || 'unknown',
+    },
+    testRunner: {
+      name: 'storybook-addon-a11y',
+    },
+    testEnvironment: {
+      userAgent: navigator.userAgent,
+      windowWidth: window.innerWidth,
+      windowHeight: window.innerHeight,
+      orientationAngle: (window.screen as any).orientation?.angle,
+      orientationType: (window.screen as any).orientation?.type,
+    },
+    toolOptions: {},
+    violations: report.violations.map((issue) => convertIssueToResult(issue)),
+    passes: report.passes.map((issue) => convertIssueToResult(issue)),
+    incomplete: report.incomplete.map((issue) => convertIssueToResult(issue)),
+    inapplicable: [],
+  } as AxeResults;
+}
+
+function convertIssueToResult(issue: any): any {
+  // If we have the original axe-core result stored, use it directly
+  // This preserves all axe-specific properties like 'any', 'all', 'none'
+  if (issue.engineSpecific?.axeResult) {
+    return issue.engineSpecific.axeResult;
+  }
+
+  // Fallback: construct a basic result (shouldn't happen with axe-core)
+  return {
+    id: issue.ruleId,
+    impact: issue.engineSpecific?.impact,
+    tags: issue.tags,
+    description: issue.description,
+    help: issue.help,
+    helpUrl: issue.helpUrl,
+    nodes: issue.nodes.map((node: any) => ({
+      html: node.html,
+      target: node.target,
+      xpath: node.xpath,
+      any: [],
+      all: [],
+      none: [],
+    })),
+  };
+}
 
 channel.on(EVENTS.MANUAL, async (storyId: string, input: A11yParameters = DEFAULT_PARAMETERS) => {
   try {

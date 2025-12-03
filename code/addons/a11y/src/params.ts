@@ -1,44 +1,65 @@
-import type { RunOptions, Selector, SelectorList, Spec } from 'axe-core';
+/******************************************************************************
+ * Storybook A11y Addon - Parameters
+ * Configuration parameters for accessibility testing
+ *****************************************************************************/
 
-export type SelectorWithoutNode = Omit<Selector, 'Node'> | Omit<SelectorList, 'NodeList'>;
+import type { A11yEngineType, A11yEngineConfig } from './engines/types';
 
-// copy of ContextObject from axe-core
-export type ContextObjectWithoutNode =
-  | {
-      include: SelectorWithoutNode;
-      exclude?: SelectorWithoutNode;
-    }
-  | {
-      exclude: SelectorWithoutNode;
-      include?: SelectorWithoutNode;
-    };
-// copy of ContextSpec from axe-core
-export type ContextSpecWithoutNode = SelectorWithoutNode | ContextObjectWithoutNode;
-
-type A11yTest = 'off' | 'todo' | 'error';
-
+/**
+ * Configuration parameters for the a11y addon
+ */
 export interface A11yParameters {
   /**
-   * Context parameter for axe-core's run function, except without support for passing Nodes and
-   * NodeLists directly.
-   *
-   * @see https://github.com/dequelabs/axe-core/blob/develop/doc/context.md
+   * Disable accessibility testing entirely
+   * @default false
    */
-  context?: ContextSpecWithoutNode;
-  /**
-   * Options for running axe-core.
-   *
-   * @see https://github.com/dequelabs/axe-core/blob/develop/doc/API.md#options-parameter
-   */
-  options?: RunOptions;
-  /**
-   * Configuration object for axe-core.
-   *
-   * @see https://github.com/dequelabs/axe-core/blob/develop/doc/API.md#api-name-axeconfigure
-   */
-  config?: Spec;
-  /** Whether to disable accessibility tests. */
   disable?: boolean;
-  /** Defines how accessibility violations should be handled: 'off', 'todo', or 'error'. */
-  test?: A11yTest;
+
+  /**
+   * Test behavior mode
+   * - 'off': Don't run tests
+   * - 'todo': Run tests but only show warnings
+   * - 'error': Run tests and fail on violations
+   * @default 'todo'
+   */
+  test?: 'off' | 'todo' | 'error';
+
+  /**
+   * Accessibility engine to use
+   * @default 'axe-core'
+   */
+  engine?: A11yEngineType;
+
+  /**
+   * Configuration for the selected engine
+   */
+  config?: A11yEngineConfig;
+
+  /**
+   * Context for accessibility testing
+   * Specifies which parts of the DOM to test
+   */
+  context?: 
+    | string 
+    | string[] 
+    | Node 
+    | Node[] 
+    | {
+        include?: string | string[] | Node | Node[];
+        exclude?: string | string[] | Node | Node[];
+      };
+
+  /**
+   * @deprecated Use config.engineOptions instead
+   * Legacy axe-core options for backward compatibility
+   */
+  options?: any;
+
+  /**
+   * @deprecated This parameter is no longer supported
+   * Use context.include instead
+   */
+  element?: never;
 }
+
+// Made with Bob
