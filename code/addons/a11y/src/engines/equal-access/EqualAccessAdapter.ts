@@ -32,7 +32,7 @@ enum EqualAccessConfidence {
 /** Adapter for IBM Equal Access accessibility testing engine */
 export class EqualAccessAdapter implements IA11yEngine {
   readonly type: A11yEngineType = A11yEngineType.EQUAL_ACCESS;
-  readonly version: string = '3.1.0'; // Will be updated dynamically
+  readonly version: string = '4.0.9'; // IBM Equal Access Checker Engine version
 
   private checker: EqualAccessChecker | null = null;
   private initialized: boolean = false;
@@ -283,17 +283,18 @@ export class EqualAccessAdapter implements IA11yEngine {
   private convertIssue(issue: EqualAccessIssue, nls?: EqualAccessReport['nls']): A11yIssue {
     const [policy, confidence] = issue.value;
 
-    // Get help URL
-    const helpUrl = this.getHelpUrl(issue.ruleId, issue.reasonId);
+    // Get help URL with full issue context
+    const helpUrl = this.getHelpUrl(issue);
 
-    // Get localized message
-    const message = this.getMessage(issue, nls);
+    // Get short description (group message) and detailed message
+    const shortDescription = this.getGroupMessage(issue, nls);
+    const detailedMessage = this.getMessage(issue, nls);
 
     return {
-      id: `${issue.ruleId}-${confidence}`,
+      id: issue.ruleId, // Use just the rule ID for cleaner display
       ruleId: issue.ruleId,
-      description: message,
-      help: message,
+      description: shortDescription, // Short description for list view
+      help: detailedMessage, // Detailed message for help text
       helpUrl,
       severity: this.mapSeverity(policy, confidence),
       confidence: this.mapConfidence(confidence),
@@ -312,12 +313,80 @@ export class EqualAccessAdapter implements IA11yEngine {
 
   /** Convert IBM Equal Access issue node to normalized format */
   private convertNode(issue: EqualAccessIssue): A11yIssueNode {
+    // Generate CSS selector from the actual element
+    // IBM Equal Access provides the element reference in issue.node
+    const cssSelector = this.generateCssSelector(issue.node);
+
     return {
       html: issue.snippet,
-      target: issue.path.dom ? [issue.path.dom] : [],
-      xpath: issue.path.xpath || undefined,
+      target: cssSelector ? [cssSelector] : [],
+      xpath: issue.path.xpath || issue.path.dom || undefined,
       bounds: issue.bounds,
+      // Add axe-core compatibility properties for Details component
+      any: [],
+      all: [],
+      none: [],
     };
+  }
+
+  /**
+   * Generate a CSS selector for an element that works within the iframe context This creates a
+   * selector relative to the document root, similar to axe-core
+   */
+  private generateCssSelector(element: Element | undefined): string | null {
+    if (!element || !(element instanceof Element)) {
+      return null;
+    }
+
+    try {
+      // Build selector path from element to root
+      const path: string[] = [];
+      let current: Element | null = element;
+
+      while (current && current.nodeType === Node.ELEMENT_NODE) {
+        let selector = current.tagName.toLowerCase();
+
+        // Add ID if available (most specific)
+        if (current.id) {
+          selector += `#${CSS.escape(current.id)}`;
+          path.unshift(selector);
+          break; // ID is unique, we can stop here
+        }
+
+        // Add classes if available
+        if (current.className && typeof current.className === 'string') {
+          const classes = current.className.trim().split(/\s+/).filter(Boolean);
+          if (classes.length > 0) {
+            selector += '.' + classes.map((c) => CSS.escape(c)).join('.');
+          }
+        }
+
+        // Add nth-of-type if needed for specificity
+        if (current.parentElement) {
+          const siblings = Array.from(current.parentElement.children).filter(
+            (el) => el.tagName === current!.tagName
+          );
+          if (siblings.length > 1) {
+            const index = siblings.indexOf(current) + 1;
+            selector += `:nth-of-type(${index})`;
+          }
+        }
+
+        path.unshift(selector);
+
+        // Stop at body to keep selectors manageable
+        if (current.tagName.toLowerCase() === 'body') {
+          break;
+        }
+
+        current = current.parentElement;
+      }
+
+      return path.join(' > ');
+    } catch (error) {
+      console.warn('[Storybook A11y] Failed to generate CSS selector:', error);
+      return null;
+    }
   }
 
   /** Map IBM Equal Access policy/confidence to normalized severity */
@@ -355,13 +424,37 @@ export class EqualAccessAdapter implements IA11yEngine {
   }
 
   /** Get help URL for a rule */
-  private getHelpUrl(ruleId: string, reasonId?: number | string): string {
-    // IBM Equal Access help URLs follow a pattern
-    const baseUrl = 'https://www.ibm.com/able/requirements/requirements';
-    return `${baseUrl}/#${ruleId}`;
+  private getHelpUrl(issue: EqualAccessIssue): string {
+    // IBM Equal Access help URLs are hosted on unpkg CDN
+    // Format: https://unpkg.com/accessibility-checker-engine@{version}/help/en-US/{ruleId}.html#{fragment}
+    // The help page JavaScript (help.js) parses the fragment to display issue details
+
+    // Build the fragment with issue details that help.js expects
+    const fragment = {
+      message: issue.message,
+      msgArgs: issue.msgArgs || [],
+      value: issue.value,
+      reasonId: issue.reasonId,
+      snippet: issue.snippet, // Include snippet for "Element location" section
+    };
+
+    const encodedFragment = encodeURIComponent(JSON.stringify(fragment));
+
+    return `https://unpkg.com/accessibility-checker-engine@${this.version}/help/en-US/${issue.ruleId}.html#${encodedFragment}`;
   }
 
-  /** Get localized message for an issue */
+  /** Get short group message for an issue (used as description) */
+  private getGroupMessage(issue: EqualAccessIssue, nls?: EqualAccessReport['nls']): string {
+    // Try to get the group message from NLS data
+    if (nls && issue.ruleId in nls && 'group' in nls[issue.ruleId]) {
+      return nls[issue.ruleId].group;
+    }
+
+    // Fall back to the detailed message if group message not available
+    return this.getMessage(issue, nls);
+  }
+
+  /** Get detailed localized message for an issue */
   private getMessage(issue: EqualAccessIssue, nls?: EqualAccessReport['nls']): string {
     if (issue.message) {
       return issue.message;

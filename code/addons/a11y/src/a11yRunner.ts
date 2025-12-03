@@ -153,15 +153,10 @@ export const run = async (
           `[Storybook A11y] Check complete: ${violationCount} violations, ${passCount} passes, ${incompleteCount} incomplete`
         );
 
-        // For axe-core, maintain backward compatibility by adding link paths
-        if (engineType === 'axe-core') {
-          // Convert to AxeResults format for backward compatibility
-          const axeResult = convertToAxeResults(result);
-          const resultWithLinks = withLinkPaths(axeResult, storyId);
-          resolve(resultWithLinks);
-        } else {
-          resolve(result);
-        }
+        // Convert to AxeResults format for backward compatibility and add link paths
+        const axeResult = convertToAxeResults(result);
+        const resultWithLinks = withLinkPaths(axeResult, storyId);
+        resolve(resultWithLinks);
       } catch (error) {
         console.error(`[Storybook A11y] Check failed with ${engineType} engine:`, error);
         reject(error);
@@ -182,6 +177,12 @@ export const run = async (
 
 /** Convert normalized A11yReport back to AxeResults format for backward compatibility */
 function convertToAxeResults(report: A11yReport): AxeResults {
+  // Combine violations and warnings since axe-core doesn't have a separate warnings category
+  const allViolations = [
+    ...report.violations.map((issue) => convertIssueToResult(issue)),
+    ...report.warnings.map((issue) => convertIssueToResult(issue)),
+  ];
+
   return {
     url: report.url || '',
     timestamp: new Date(report.timestamp).toISOString(),
@@ -200,7 +201,7 @@ function convertToAxeResults(report: A11yReport): AxeResults {
       orientationType: (window.screen as any).orientation?.type,
     },
     toolOptions: {},
-    violations: report.violations.map((issue) => convertIssueToResult(issue)),
+    violations: allViolations,
     passes: report.passes.map((issue) => convertIssueToResult(issue)),
     incomplete: report.incomplete.map((issue) => convertIssueToResult(issue)),
     inapplicable: [],
@@ -214,7 +215,8 @@ function convertIssueToResult(issue: any): any {
     return issue.engineSpecific.axeResult;
   }
 
-  // Fallback: construct a basic result (shouldn't happen with axe-core)
+  // Fallback: construct a basic result for non-axe engines (e.g., IBM Equal Access)
+  // Preserve all node properties to maintain backward compatibility
   return {
     id: issue.ruleId,
     impact: issue.engineSpecific?.impact,
@@ -223,12 +225,10 @@ function convertIssueToResult(issue: any): any {
     help: issue.help,
     helpUrl: issue.helpUrl,
     nodes: issue.nodes.map((node: any) => ({
+      ...node, // Preserve all existing node properties (any, all, none, etc.)
       html: node.html,
       target: node.target,
       xpath: node.xpath,
-      any: [],
-      all: [],
-      none: [],
     })),
   };
 }

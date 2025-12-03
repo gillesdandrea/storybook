@@ -250,8 +250,11 @@ export class AxeCoreAdapter implements IA11yEngine {
   private convertNode(node: NodeResult): A11yIssueNode {
     return {
       html: node.html,
-      target: node.target,
-      xpath: node.xpath,
+      target: Array.isArray(node.target) ? node.target.map(String) : [String(node.target)],
+      xpath: Array.isArray(node.xpath) ? node.xpath.join(' | ') : node.xpath,
+      any: node.any,
+      all: node.all,
+      none: node.none,
     };
   }
 
