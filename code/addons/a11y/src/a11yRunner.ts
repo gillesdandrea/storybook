@@ -58,6 +58,8 @@ export const run = async (
   // Determine which engine to use (default to axe-core for backward compatibility)
   const engineType = (input.engine || 'axe-core') as A11yEngineType;
 
+  console.log(`[Storybook A11y] Running accessibility check with ${engineType} engine`);
+
   // Get or initialize the engine
   const engine = await EngineRegistry.getOrInitialize(engineType);
 
@@ -143,6 +145,14 @@ export const run = async (
       try {
         const result = await engine.run(context, config);
 
+        // Log results summary
+        const violationCount = result.violations?.length || 0;
+        const passCount = result.passes?.length || 0;
+        const incompleteCount = result.incomplete?.length || 0;
+        console.log(
+          `[Storybook A11y] Check complete: ${violationCount} violations, ${passCount} passes, ${incompleteCount} incomplete`
+        );
+
         // For axe-core, maintain backward compatibility by adding link paths
         if (engineType === 'axe-core') {
           // Convert to AxeResults format for backward compatibility
@@ -153,6 +163,7 @@ export const run = async (
           resolve(result);
         }
       } catch (error) {
+        console.error(`[Storybook A11y] Check failed with ${engineType} engine:`, error);
         reject(error);
       } finally {
         if (highlightsRoot) {

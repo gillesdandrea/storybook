@@ -101,7 +101,6 @@ const PlayFnNotice = styled.div(
     padding: '3px 8px',
     fontSize: '10px',
     fontWeight: 'bold',
-    zIndex: 99,
     '> *': {
       display: 'block',
     },
@@ -411,5 +410,29 @@ export default definePreview({
   decorators,
   loaders,
   tags: ['test', 'vitest'],
-  parameters,
+  parameters: {
+    ...parameters,
+    // A11y addon configuration
+    a11y: {
+      // Switch between engines: 'axe-core' (default) or 'equal-access'
+      
+      // Axe-core configuration (commented out for easy switching)
+      // engine: 'axe-core',
+      // config: {
+      //   rules: [
+      //     {
+      //       id: 'color-contrast',
+      //       enabled: true,
+      //     },
+      //   ],
+      // },
+      
+      // IBM Equal Access configuration
+      engine: 'equal-access',
+      config: {
+        policies: ['IBM_Accessibility'],
+        // Other available policies: 'WCAG_2_1', 'WCAG_2_0'
+      },
+    },
+  },
 });

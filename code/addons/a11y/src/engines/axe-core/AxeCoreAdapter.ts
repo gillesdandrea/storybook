@@ -1,28 +1,25 @@
-/******************************************************************************
- * Storybook A11y Addon - Axe-Core Adapter
- * Wraps axe-core engine with normalized interface
- *****************************************************************************/
+/** Storybook A11y Addon - Axe-Core Adapter Wraps axe-core engine with normalized interface */
+import type { AxeResults, NodeResult, Result, RunOptions, Spec } from 'axe-core';
 
-import type { AxeResults, Result, NodeResult, RunOptions, Spec } from 'axe-core';
 import type {
-  IA11yEngine,
-  A11yEngineType,
-  A11yReport,
-  A11yIssue,
-  A11yEngineConfig,
-  A11yContext,
-  A11ySeverity,
   A11yConfidence,
+  A11yContext,
+  A11yEngineConfig,
+  A11yEngineType,
+  A11yIssue,
   A11yIssueNode,
+  A11yReport,
+  A11ySeverity,
+  IA11yEngine,
 } from '../types';
 
 /**
- * Adapter for axe-core accessibility engine
- * Maintains full backward compatibility with existing axe-core usage
+ * Adapter for axe-core accessibility engine Maintains full backward compatibility with existing
+ * axe-core usage
  */
 export class AxeCoreAdapter implements IA11yEngine {
   readonly type: A11yEngineType = 'axe-core' as A11yEngineType;
-  
+
   private axe: any = null;
   private initialized = false;
 
@@ -30,42 +27,40 @@ export class AxeCoreAdapter implements IA11yEngine {
     return this.axe?.version || 'unknown';
   }
 
-  /**
-   * Initialize axe-core engine
-   * Uses dynamic import to support various bundler configurations
-   */
+  /** Initialize axe-core engine Uses dynamic import to support various bundler configurations */
   async initialize(): Promise<void> {
-    if (this.initialized) return;
-    
+    if (this.initialized) {
+      return;
+    }
+
     try {
+      console.log('[Storybook A11y] Loading axe-core engine...');
+
       const axeCore = await import('axe-core');
       // Handle both ESM and UMD formats
       this.axe = axeCore?.default || (globalThis as any).axe;
-      
+
       if (!this.axe) {
         throw new Error('Failed to load axe-core');
       }
-      
+
       this.initialized = true;
+      console.log(`[Storybook A11y] ✓ axe-core engine loaded (v${this.version})`);
     } catch (error) {
-      throw new Error(`Failed to initialize axe-core: ${error instanceof Error ? error.message : String(error)}`);
+      console.error('[Storybook A11y] ✗ Failed to load axe-core engine:', error);
+      throw new Error(
+        `Failed to initialize axe-core: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 
-  /**
-   * Check if the engine is ready to run
-   */
+  /** Check if the engine is ready to run */
   isReady(): boolean {
     return this.initialized && this.axe !== null;
   }
 
-  /**
-   * Run accessibility check using axe-core
-   */
-  async run(
-    context: A11yContext,
-    config: A11yEngineConfig
-  ): Promise<A11yReport> {
+  /** Run accessibility check using axe-core */
+  async run(context: A11yContext, config: A11yEngineConfig): Promise<A11yReport> {
     if (!this.isReady()) {
       throw new Error('AxeCoreAdapter not initialized. Call initialize() first.');
     }
@@ -75,10 +70,10 @@ export class AxeCoreAdapter implements IA11yEngine {
     try {
       // Convert normalized context to axe format
       const axeContext = this.convertContext(context);
-      
+
       // Convert normalized config to axe format
       const { axeConfig, axeOptions } = this.convertConfig(config);
-      
+
       // Reset and configure axe
       this.axe.reset();
       if (axeConfig && Object.keys(axeConfig).length > 0) {
@@ -93,18 +88,18 @@ export class AxeCoreAdapter implements IA11yEngine {
       // Convert results to normalized format
       return this.convertResults(axeResults, executionTime);
     } catch (error) {
-      throw new Error(`Axe-core execution failed: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Axe-core execution failed: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 
-  /**
-   * Get available rules from axe-core
-   */
+  /** Get available rules from axe-core */
   async getRules(): Promise<Array<{ id: string; description: string; tags: string[] }>> {
     if (!this.isReady()) {
       await this.initialize();
     }
-    
+
     try {
       const rules = this.axe.getRules();
       return rules.map((rule: any) => ({
@@ -118,9 +113,7 @@ export class AxeCoreAdapter implements IA11yEngine {
     }
   }
 
-  /**
-   * Cleanup axe-core resources
-   */
+  /** Cleanup axe-core resources */
   async cleanup(): Promise<void> {
     if (this.axe) {
       try {
@@ -133,9 +126,7 @@ export class AxeCoreAdapter implements IA11yEngine {
     this.initialized = false;
   }
 
-  /**
-   * Convert normalized context to axe-core format
-   */
+  /** Convert normalized context to axe-core format */
   private convertContext(context: A11yContext): Spec {
     const axeContext: Spec = {
       include: [],
@@ -151,7 +142,7 @@ export class AxeCoreAdapter implements IA11yEngine {
       } else if (Array.isArray(context.include)) {
         if (context.include.length > 0) {
           if (context.include[0] instanceof Node) {
-            axeContext.include = context.include.map(node => [node as any]);
+            axeContext.include = context.include.map((node) => [node as any]);
           } else {
             axeContext.include = [context.include as string[]];
           }
@@ -171,7 +162,7 @@ export class AxeCoreAdapter implements IA11yEngine {
       } else if (Array.isArray(context.exclude)) {
         if (context.exclude.length > 0) {
           if (context.exclude[0] instanceof Node) {
-            axeContext.exclude = context.exclude.map(node => [node as any]);
+            axeContext.exclude = context.exclude.map((node) => [node as any]);
           } else {
             axeContext.exclude = [context.exclude as string[]];
           }
@@ -182,14 +173,12 @@ export class AxeCoreAdapter implements IA11yEngine {
     return axeContext;
   }
 
-  /**
-   * Convert normalized config to axe-core format
-   */
+  /** Convert normalized config to axe-core format */
   private convertConfig(config: A11yEngineConfig): { axeConfig: any; axeOptions: RunOptions } {
     const axeConfig: any = {
       rules: [],
     };
-    
+
     const axeOptions: RunOptions = config.engineOptions || {};
 
     // Convert rule configuration
@@ -206,24 +195,13 @@ export class AxeCoreAdapter implements IA11yEngine {
     return { axeConfig, axeOptions };
   }
 
-  /**
-   * Convert axe-core results to normalized format
-   */
-  private convertResults(
-    axeResults: AxeResults,
-    executionTime: number
-  ): A11yReport {
-    const violations = axeResults.violations.map(v => 
-      this.convertIssue(v, 'violation')
-    );
-    
-    const passes = axeResults.passes.map(p => 
-      this.convertIssue(p, 'pass')
-    );
-    
-    const incomplete = axeResults.incomplete.map(i => 
-      this.convertIssue(i, 'incomplete')
-    );
+  /** Convert axe-core results to normalized format */
+  private convertResults(axeResults: AxeResults, executionTime: number): A11yReport {
+    const violations = axeResults.violations.map((v) => this.convertIssue(v, 'violation'));
+
+    const passes = axeResults.passes.map((p) => this.convertIssue(p, 'pass'));
+
+    const incomplete = axeResults.incomplete.map((i) => this.convertIssue(i, 'incomplete'));
 
     return {
       engine: this.type,
@@ -248,9 +226,7 @@ export class AxeCoreAdapter implements IA11yEngine {
     };
   }
 
-  /**
-   * Convert a single axe-core result to normalized issue format
-   */
+  /** Convert a single axe-core result to normalized issue format */
   private convertIssue(result: Result, type: 'violation' | 'pass' | 'incomplete'): A11yIssue {
     return {
       id: `${result.id}-${type}`,
@@ -261,7 +237,7 @@ export class AxeCoreAdapter implements IA11yEngine {
       severity: this.mapSeverity(result.impact, type),
       confidence: this.mapConfidence(type),
       tags: result.tags,
-      nodes: result.nodes.map(node => this.convertNode(node)),
+      nodes: result.nodes.map((node) => this.convertNode(node)),
       engine: this.type,
       engineSpecific: {
         impact: result.impact,
@@ -270,9 +246,7 @@ export class AxeCoreAdapter implements IA11yEngine {
     };
   }
 
-  /**
-   * Convert axe-core node to normalized format
-   */
+  /** Convert axe-core node to normalized format */
   private convertNode(node: NodeResult): A11yIssueNode {
     return {
       html: node.html,
@@ -281,18 +255,16 @@ export class AxeCoreAdapter implements IA11yEngine {
     };
   }
 
-  /**
-   * Map axe-core impact levels to normalized severity
-   */
+  /** Map axe-core impact levels to normalized severity */
   private mapSeverity(impact: string | undefined, type: string): A11ySeverity {
     if (type === 'pass') {
       return 'information' as A11ySeverity;
     }
-    
+
     if (type === 'incomplete') {
       return 'warning' as A11ySeverity;
     }
-    
+
     switch (impact) {
       case 'critical':
       case 'serious':
@@ -306,9 +278,7 @@ export class AxeCoreAdapter implements IA11yEngine {
     }
   }
 
-  /**
-   * Map result type to normalized confidence level
-   */
+  /** Map result type to normalized confidence level */
   private mapConfidence(type: string): A11yConfidence {
     switch (type) {
       case 'violation':
