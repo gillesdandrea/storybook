@@ -15,7 +15,7 @@ describe('a11yRunner', () => {
     mockedAddons.getChannel.mockReset();
 
     mockChannel = { on: vi.fn(), emit: vi.fn() };
-    mockedAddons.getChannel.mockReturnValue(mockChannel as any);
+    mockedAddons.getChannel.mockReturnValue(mockChannel as unknown as ReturnType<typeof addons.getChannel>);
   });
 
   it('should listen to events', async () => {

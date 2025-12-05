@@ -38,11 +38,11 @@ export interface A11yIssueNode {
     height: number;
   };
   /** Axe-core specific: checks that passed (for backward compatibility) */
-  any?: Array<{ id: string; message: string; data?: any }>;
+  any?: Array<{ id: string; message: string; data?: unknown }>;
   /** Axe-core specific: checks that must all pass (for backward compatibility) */
-  all?: Array<{ id: string; message: string; data?: any }>;
+  all?: Array<{ id: string; message: string; data?: unknown }>;
   /** Axe-core specific: checks that must not pass (for backward compatibility) */
-  none?: Array<{ id: string; message: string; data?: any }>;
+  none?: Array<{ id: string; message: string; data?: unknown }>;
 }
 
 /** Normalized accessibility issue format */
@@ -68,7 +68,7 @@ export interface A11yIssue {
   /** Engine that detected this issue */
   engine: A11yEngineType;
   /** Engine-specific data preserved for advanced use cases */
-  engineSpecific?: Record<string, any>;
+  engineSpecific?: Record<string, unknown>;
 }
 
 /** Normalized accessibility report format */
@@ -112,12 +112,12 @@ export interface A11yEngineConfig {
   rules?: {
     [ruleId: string]: {
       enabled: boolean;
-      options?: Record<string, any>;
+      options?: Record<string, unknown>;
     };
   };
 
   /** Engine-specific options */
-  engineOptions?: Record<string, any>;
+  engineOptions?: Record<string, unknown>;
 }
 
 /** Context specification for accessibility testing */

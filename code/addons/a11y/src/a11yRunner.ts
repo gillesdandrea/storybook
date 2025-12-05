@@ -50,8 +50,7 @@ export const run = async (
   input: A11yParameters = DEFAULT_PARAMETERS,
   storyId: string
 ): Promise<A11yReport | AxeResults> => {
-  // @ts-expect-error - the whole point of this is to error if 'element' is passed
-  if (input.element) {
+  if ('element' in input) {
     throw new ElementA11yParameterError();
   }
 
@@ -81,18 +80,20 @@ export const run = async (
 
     // 1. if context.include exists, use it
     if (hasInclude) {
-      context.include = (input.context as any).include;
+      context.include = (input.context as { include: A11yContext['include'] }).include;
     } else if (!hasInclude && !hasExclude) {
       // 2. if context exists, but it's not an object with include or exclude, it's an implicit include
-      context.include = input.context as any;
+      context.include = input.context as A11yContext['include'];
     }
 
     // 3. if context.exclude exists, merge it with the default exclude
     if (hasExclude) {
-      const userExclude = (input.context as any).exclude;
-      context.exclude = Array.isArray(userExclude)
-        ? [...(context.exclude as string[]), ...userExclude]
-        : [...(context.exclude as string[]), userExclude];
+      const userExclude = (input.context as { exclude: A11yContext['exclude'] }).exclude;
+      if (Array.isArray(userExclude)) {
+        context.exclude = [...(context.exclude as string[]), ...(userExclude as string[])];
+      } else if (userExclude) {
+        context.exclude = [...(context.exclude as string[]), userExclude as string];
+      }
     }
   }
 
@@ -120,14 +121,15 @@ export const run = async (
     }
 
     // Handle legacy config parameter (axe-core specific format)
-    if ((input as any).config?.rules) {
-      const legacyRules = (input as any).config.rules;
+    if (input.config?.rules) {
+      const legacyRules = input.config.rules as unknown as unknown[];
       if (Array.isArray(legacyRules)) {
         for (const rule of legacyRules) {
-          if (rule.id) {
-            config.rules[rule.id] = {
-              enabled: rule.enabled !== false,
-              options: rule,
+          const ruleObj = rule as { id?: string; enabled?: boolean };
+          if (ruleObj.id) {
+            config.rules[ruleObj.id] = {
+              enabled: ruleObj.enabled !== false,
+              options: rule as Record<string, unknown>,
             };
           }
         }
@@ -197,8 +199,8 @@ function convertToAxeResults(report: A11yReport): AxeResults {
       userAgent: navigator.userAgent,
       windowWidth: window.innerWidth,
       windowHeight: window.innerHeight,
-      orientationAngle: (window.screen as any).orientation?.angle,
-      orientationType: (window.screen as any).orientation?.type,
+      orientationAngle: (window.screen as { orientation?: { angle?: number } }).orientation?.angle,
+      orientationType: (window.screen as { orientation?: { type?: string } }).orientation?.type,
     },
     toolOptions: {},
     violations: allViolations,
@@ -208,30 +210,45 @@ function convertToAxeResults(report: A11yReport): AxeResults {
   } as AxeResults;
 }
 
-function convertIssueToResult(issue: any): any {
+function convertIssueToResult(issue: unknown): unknown {
+  const issueObj = issue as {
+    engineSpecific?: { axeResult?: unknown; impact?: string };
+    ruleId?: string;
+    tags?: string[];
+    description?: string;
+    help?: string;
+    helpUrl?: string;
+    nodes?: Array<{
+      html?: string;
+      target?: string[];
+      xpath?: string;
+      [key: string]: unknown;
+    }>;
+  };
+
   // If we have the original axe-core result stored, use it directly
   // This preserves all axe-specific properties like 'any', 'all', 'none'
-  if (issue.engineSpecific?.axeResult) {
-    return issue.engineSpecific.axeResult;
+  if (issueObj.engineSpecific?.axeResult) {
+    return issueObj.engineSpecific.axeResult;
   }
 
   // Fallback: construct a basic result for non-axe engines (e.g., IBM Equal Access)
   // Preserve all node properties to maintain backward compatibility
   return {
-    id: issue.ruleId,
-    impact: issue.engineSpecific?.impact,
-    tags: issue.tags,
-    description: issue.description,
-    help: issue.help,
-    helpUrl: issue.helpUrl,
-    nodes: issue.nodes.map((node: any) => ({
+    id: issueObj.ruleId,
+    impact: issueObj.engineSpecific?.impact,
+    tags: issueObj.tags,
+    description: issueObj.description,
+    help: issueObj.help,
+    helpUrl: issueObj.helpUrl,
+    nodes: issueObj.nodes?.map((node) => ({
       ...node, // Preserve all existing node properties (any, all, none, etc.)
       html: node.html,
       target: node.target,
       xpath: node.xpath,
     })),
     // Preserve engineSpecific data for Equal Access and other engines
-    engineSpecific: issue.engineSpecific,
+    engineSpecific: issueObj.engineSpecific,
   };
 }
 
@@ -243,7 +260,7 @@ channel.on(EVENTS.MANUAL, async (storyId: string, input: A11yParameters = DEFAUL
     const engineType = (input.engine || 'axe-core') as A11yEngineType;
     const engine = await EngineRegistry.getOrInitialize(engineType);
     // Cast to access getRuleProvider (not in IA11yEngine interface but available on adapters)
-    const provider = (engine as any).getRuleProvider?.();
+    const provider = (engine as { getRuleProvider?: () => { getAllRules: () => Promise<unknown[]> } }).getRuleProvider?.();
     
     // Send rule metadata to manager if provider is available
     if (provider) {

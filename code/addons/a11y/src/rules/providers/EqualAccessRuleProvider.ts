@@ -1,17 +1,25 @@
 import type { A11yEngineType, A11ySeverity } from '../../engines/types';
 import type { A11yRuleMetadata, IA11yRuleProvider, A11yRuleCategory } from '../types';
 
+interface EqualAccessEngine {
+  engine: {
+    getRulesIds: () => string[];
+    getRule: (ruleId: string) => unknown;
+  };
+  Checker: unknown;
+}
+
 export class EqualAccessRuleProvider implements IA11yRuleProvider {
   readonly engineType: A11yEngineType = 'equal-access' as A11yEngineType;
   
-  private eaEngine: any = null;
+  private eaEngine: EqualAccessEngine | null = null;
   private rulesCache: A11yRuleMetadata[] | null = null;
   
-  constructor(eaEngine?: any) {
-    this.eaEngine = eaEngine;
+  constructor(eaEngine?: EqualAccessEngine) {
+    this.eaEngine = eaEngine || null;
   }
   
-  setEqualAccessEngine(eaEngine: any): void {
+  setEqualAccessEngine(eaEngine: EqualAccessEngine): void {
     this.eaEngine = eaEngine;
     this.rulesCache = null;
   }
@@ -27,9 +35,12 @@ export class EqualAccessRuleProvider implements IA11yRuleProvider {
     }
     
     try {
+      if (!this.eaEngine) {
+        return [];
+      }
       const ruleIds = this.eaEngine.engine.getRulesIds();
       this.rulesCache = ruleIds.map((ruleId: string) => {
-        const rule = this.eaEngine.engine.getRule(ruleId);
+        const rule = this.eaEngine!.engine.getRule(ruleId);
         return this.convertEqualAccessRule(ruleId, rule);
       });
       return this.rulesCache;
@@ -68,9 +79,14 @@ export class EqualAccessRuleProvider implements IA11yRuleProvider {
     );
   }
   
-  private convertEqualAccessRule(ruleId: string, eaRule: any): A11yRuleMetadata {
-    const groupMessage = eaRule?.messages?.['en-US']?.group;
-    const detailMessage = eaRule?.messages?.['en-US']?.[0];
+  private convertEqualAccessRule(ruleId: string, eaRule: unknown): A11yRuleMetadata {
+    const rule = eaRule as {
+      messages?: { 'en-US'?: { group?: string; [key: string]: string | undefined } };
+      category?: string;
+      policy?: string;
+    };
+    const groupMessage = rule?.messages?.['en-US']?.group;
+    const detailMessage = rule?.messages?.['en-US']?.[0];
     
     return {
       id: ruleId,
@@ -79,14 +95,14 @@ export class EqualAccessRuleProvider implements IA11yRuleProvider {
       description: groupMessage || detailMessage || ruleId,
       help: detailMessage || groupMessage || `Rule ${ruleId} guidance`,
       helpUrl: this.generateHelpUrl(ruleId),
-      tags: eaRule?.category ? [eaRule.category] : [],
-      category: this.mapEqualAccessCategory(eaRule?.category),
-      defaultSeverity: this.mapEqualAccessPolicy(eaRule?.policy),
+      tags: rule?.category ? [rule.category] : [],
+      category: this.mapEqualAccessCategory(rule?.category),
+      defaultSeverity: this.mapEqualAccessPolicy(rule?.policy),
       wcagCriteria: this.extractWcagFromRuleId(ruleId),
       enabledByDefault: true,
       engineSpecific: {
-        category: eaRule?.category,
-        policy: eaRule?.policy,
+        category: rule?.category,
+        policy: rule?.policy,
         equalAccessRule: eaRule
       }
     };

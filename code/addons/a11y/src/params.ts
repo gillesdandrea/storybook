@@ -53,7 +53,7 @@ export interface A11yParameters {
    * @deprecated Use config.engineOptions instead
    * Legacy axe-core options for backward compatibility
    */
-  options?: any;
+  options?: Record<string, unknown>;
 
   /**
    * @deprecated This parameter is no longer supported

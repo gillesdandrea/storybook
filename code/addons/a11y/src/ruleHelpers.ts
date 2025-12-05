@@ -57,17 +57,21 @@ function getRuleMetadata(ruleId: string): A11yRuleMetadata | undefined {
  * 4. Rule ID (fallback)
  */
 export const getRuleTitle = (result: EnhancedResult): string => {
+  const resultWithEngine = result as EnhancedResult & {
+    engineSpecific?: { title?: string };
+  };
+  
   console.log('[ruleHelpers getRuleTitle] Processing result:', {
     id: result.id,
-    hasEngineSpecific: !!(result as any).engineSpecific,
-    engineSpecificTitle: (result as any).engineSpecific?.title,
+    hasEngineSpecific: !!resultWithEngine.engineSpecific,
+    engineSpecificTitle: resultWithEngine.engineSpecific?.title,
     description: result.description
   });
 
   // Check if result has engine-specific title (Equal Access stores it here)
-  if ((result as any).engineSpecific?.title) {
-    console.log('[ruleHelpers getRuleTitle] ✓ Using engineSpecific.title:', (result as any).engineSpecific.title);
-    return (result as any).engineSpecific.title;
+  if (resultWithEngine.engineSpecific?.title) {
+    console.log('[ruleHelpers getRuleTitle] ✓ Using engineSpecific.title:', resultWithEngine.engineSpecific.title);
+    return resultWithEngine.engineSpecific.title;
   }
   
   // Try registry cache

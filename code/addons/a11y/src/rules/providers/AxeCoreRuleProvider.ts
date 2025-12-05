@@ -1,18 +1,21 @@
 import type { A11yEngineType, A11ySeverity } from '../../engines/types';
 import type { A11yRuleMetadata, IA11yRuleProvider, A11yRuleCategory } from '../types';
 import { combinedRulesMap } from '../../AccessibilityRuleMaps';
+import type { RuleMetadata } from 'axe-core';
 
 export class AxeCoreRuleProvider implements IA11yRuleProvider {
   readonly engineType: A11yEngineType = 'axe-core' as A11yEngineType;
   
-  private axeEngine: any = null;
+  private axeEngine: {
+    getRules: () => RuleMetadata[];
+  } | null = null;
   private rulesCache: A11yRuleMetadata[] | null = null;
   
-  constructor(axeEngine?: any) {
-    this.axeEngine = axeEngine;
+  constructor(axeEngine?: { getRules: () => RuleMetadata[] }) {
+    this.axeEngine = axeEngine || null;
   }
   
-  setAxeEngine(axeEngine: any): void {
+  setAxeEngine(axeEngine: { getRules: () => RuleMetadata[] }): void {
     this.axeEngine = axeEngine;
     this.rulesCache = null;
   }
@@ -29,7 +32,7 @@ export class AxeCoreRuleProvider implements IA11yRuleProvider {
     
     try {
       const axeRules = this.axeEngine.getRules();
-      this.rulesCache = axeRules.map((rule: any) => this.convertAxeRule(rule));
+      this.rulesCache = axeRules.map((rule: RuleMetadata) => this.convertAxeRule(rule));
       return this.rulesCache;
     } catch (error) {
       console.warn('Failed to get axe-core rules:', error);
@@ -66,8 +69,9 @@ export class AxeCoreRuleProvider implements IA11yRuleProvider {
     );
   }
   
-  private convertAxeRule(axeRule: any): A11yRuleMetadata {
+  private convertAxeRule(axeRule: RuleMetadata): A11yRuleMetadata {
     const mapping = combinedRulesMap[axeRule.ruleId];
+    const impact = (axeRule as RuleMetadata & { impact?: string }).impact;
     
     return {
       id: axeRule.ruleId,
@@ -78,11 +82,11 @@ export class AxeCoreRuleProvider implements IA11yRuleProvider {
       helpUrl: axeRule.helpUrl,
       tags: axeRule.tags || [],
       category: this.mapAxeTagsToCategory(axeRule.tags || []),
-      defaultSeverity: this.mapAxeImpactToSeverity(axeRule.impact),
+      defaultSeverity: this.mapAxeImpactToSeverity(impact),
       wcagCriteria: this.extractWcagCriteria(axeRule.tags || []),
       enabledByDefault: true,
       engineSpecific: {
-        impact: axeRule.impact,
+        impact,
         axeRule: axeRule
       }
     };

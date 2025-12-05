@@ -1,5 +1,5 @@
 /** Storybook A11y Addon - Axe-Core Adapter Wraps axe-core engine with normalized interface */
-import type { AxeResults, NodeResult, Result, RunOptions, Spec } from 'axe-core';
+import type { AxeResults, NodeResult, Result, RunOptions, Spec, RuleMetadata, ImpactValue } from 'axe-core';
 
 import type {
   A11yConfidence,
@@ -21,7 +21,13 @@ import { AxeCoreRuleProvider } from '../../rules/providers/AxeCoreRuleProvider';
 export class AxeCoreAdapter implements IA11yEngine {
   readonly type: A11yEngineType = 'axe-core' as A11yEngineType;
 
-  private axe: any = null;
+  private axe: {
+    run: (context: Spec | Node, options?: RunOptions) => Promise<AxeResults>;
+    getRules: () => RuleMetadata[];
+    configure: (spec: Spec) => void;
+    reset: () => void;
+    version: string;
+  } | null = null;
   private initialized = false;
   private ruleProvider: AxeCoreRuleProvider | null = null;
 
@@ -40,7 +46,8 @@ export class AxeCoreAdapter implements IA11yEngine {
 
       const axeCore = await import('axe-core');
       // Handle both ESM and UMD formats
-      this.axe = axeCore?.default || (globalThis as any).axe;
+      const axeInstance = axeCore?.default || (globalThis as Record<string, unknown>).axe;
+      this.axe = axeInstance as typeof this.axe;
 
       if (!this.axe) {
         throw new Error('Failed to load axe-core');
@@ -81,6 +88,10 @@ export class AxeCoreAdapter implements IA11yEngine {
       const { axeConfig, axeOptions } = this.convertConfig(config);
 
       // Reset and configure axe
+      if (!this.axe) {
+        throw new Error('Axe instance is not available');
+      }
+      
       this.axe.reset();
       if (axeConfig && Object.keys(axeConfig).length > 0) {
         this.axe.configure(axeConfig);
@@ -107,8 +118,11 @@ export class AxeCoreAdapter implements IA11yEngine {
     }
 
     try {
+      if (!this.axe) {
+        throw new Error('Axe instance is not available');
+      }
       const rules = this.axe.getRules();
-      return rules.map((rule: any) => ({
+      return rules.map((rule: RuleMetadata) => ({
         id: rule.ruleId,
         description: rule.description || rule.help || rule.ruleId,
         tags: rule.tags || [],
@@ -125,7 +139,7 @@ export class AxeCoreAdapter implements IA11yEngine {
   }
 
   /** Get the underlying axe instance (for advanced usage) */
-  getAxeInstance(): any {
+  getAxeInstance(): unknown {
     return this.axe;
   }
 
@@ -143,8 +157,11 @@ export class AxeCoreAdapter implements IA11yEngine {
   }
 
   /** Convert normalized context to axe-core format */
-  private convertContext(context: A11yContext): Spec {
-    const axeContext: Spec = {
+  private convertContext(context: A11yContext): Spec | Node {
+    const axeContext: {
+      include?: (string[] | Node[])[];
+      exclude?: (string[] | Node[])[];
+    } = {
       include: [],
       exclude: [],
     };
@@ -152,13 +169,13 @@ export class AxeCoreAdapter implements IA11yEngine {
     // Handle include
     if (context.include) {
       if (context.include instanceof Node) {
-        axeContext.include = [[context.include as any]];
+        axeContext.include = [[context.include as Element]];
       } else if (typeof context.include === 'string') {
         axeContext.include = [[context.include]];
       } else if (Array.isArray(context.include)) {
         if (context.include.length > 0) {
           if (context.include[0] instanceof Node) {
-            axeContext.include = context.include.map((node) => [node as any]);
+            axeContext.include = context.include.map((node) => [node as Element]);
           } else {
             axeContext.include = [context.include as string[]];
           }
@@ -178,7 +195,7 @@ export class AxeCoreAdapter implements IA11yEngine {
       } else if (Array.isArray(context.exclude)) {
         if (context.exclude.length > 0) {
           if (context.exclude[0] instanceof Node) {
-            axeContext.exclude = context.exclude.map((node) => [node as any]);
+            axeContext.exclude = context.exclude.map((node) => [node as Element]);
           } else {
             axeContext.exclude = [context.exclude as string[]];
           }
@@ -186,26 +203,28 @@ export class AxeCoreAdapter implements IA11yEngine {
       }
     }
 
-    return axeContext;
+    return axeContext as Spec;
   }
 
   /** Convert normalized config to axe-core format */
-  private convertConfig(config: A11yEngineConfig): { axeConfig: any; axeOptions: RunOptions } {
-    const axeConfig: any = {
+  private convertConfig(config: A11yEngineConfig): { axeConfig: Spec; axeOptions: RunOptions } {
+    const axeConfig: Spec = {
       rules: [],
     };
 
-    const axeOptions: RunOptions = config.engineOptions || {};
+    const axeOptions: RunOptions = (config.engineOptions as RunOptions) || {};
 
     // Convert rule configuration
     if (config.rules) {
+      const rules: Array<{ id: string; enabled: boolean; [key: string]: unknown }> = [];
       for (const [ruleId, ruleConfig] of Object.entries(config.rules)) {
-        axeConfig.rules.push({
+        rules.push({
           id: ruleId,
           enabled: ruleConfig.enabled,
           ...ruleConfig.options,
         });
       }
+      axeConfig.rules = rules as Spec['rules'];
     }
 
     return { axeConfig, axeOptions };
@@ -275,7 +294,7 @@ export class AxeCoreAdapter implements IA11yEngine {
   }
 
   /** Map axe-core impact levels to normalized severity */
-  private mapSeverity(impact: string | undefined, type: string): A11ySeverity {
+  private mapSeverity(impact: ImpactValue | undefined | null, type: string): A11ySeverity {
     if (type === 'pass') {
       return 'information' as A11ySeverity;
     }

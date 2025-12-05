@@ -8,27 +8,34 @@ import type {
   IA11yEngine,
 } from '../types';
 import { EqualAccessRuleProvider } from '../../rules/providers/EqualAccessRuleProvider';
+import type { Checker } from 'accessibility-checker-engine';
+import type { Report } from 'accessibility-checker-engine/v4/api/IReport';
+import type { eRulePolicy, eRuleConfidence, Issue } from 'accessibility-checker-engine/v4/api/IRule';
+import type { Guideline } from 'accessibility-checker-engine/v4/api/IGuideline';
 
-// IBM Equal Access types - using 'any' for now to avoid type conflicts
-// The actual types will be resolved when the package is installed
-type EqualAccessChecker = any;
-type EqualAccessReport = any;
-type EqualAccessIssue = any;
-type EqualAccessGuideline = any;
+// IBM Equal Access types
+type EqualAccessChecker = Checker;
+type EqualAccessReport = Report;
+type EqualAccessIssue = Issue;
+type EqualAccessGuideline = Guideline;
 
-// Policy and Confidence enums matching IBM Equal Access
-enum EqualAccessPolicy {
-  VIOLATION = 'VIOLATION',
-  RECOMMENDATION = 'RECOMMENDATION',
-  INFORMATION = 'INFORMATION',
-}
+// Use the actual enums from the library
+type EqualAccessPolicy = eRulePolicy;
+type EqualAccessConfidence = eRuleConfidence;
 
-enum EqualAccessConfidence {
-  PASS = 'PASS',
-  FAIL = 'FAIL',
-  POTENTIAL = 'POTENTIAL',
-  MANUAL = 'MANUAL',
-}
+// Re-export enum values for convenience
+const EqualAccessPolicy = {
+  VIOLATION: 'VIOLATION' as eRulePolicy,
+  RECOMMENDATION: 'RECOMMENDATION' as eRulePolicy,
+  INFORMATION: 'INFORMATION' as eRulePolicy,
+};
+
+const EqualAccessConfidence = {
+  PASS: 'PASS' as eRuleConfidence,
+  FAIL: 'FAIL' as eRuleConfidence,
+  POTENTIAL: 'POTENTIAL' as eRuleConfidence,
+  MANUAL: 'MANUAL' as eRuleConfidence,
+};
 
 /** Adapter for IBM Equal Access accessibility testing engine */
 export class EqualAccessAdapter implements IA11yEngine {
@@ -47,7 +54,8 @@ export class EqualAccessAdapter implements IA11yEngine {
     }
 
     // Check if already loaded globally
-    if ((window as any).ace && (window as any).ace.Checker) {
+    const globalWindow = window as Window & { ace?: { Checker: typeof Checker } };
+    if (globalWindow.ace && globalWindow.ace.Checker) {
       this.scriptLoaded = true;
       return;
     }
@@ -65,11 +73,12 @@ export class EqualAccessAdapter implements IA11yEngine {
       script.onload = () => {
         // Give the script time to execute and set the global
         setTimeout(() => {
-          if ((window as any).ace && (window as any).ace.Checker) {
+          const globalWindow = window as Window & { ace?: { Checker: typeof Checker } };
+          if (globalWindow.ace && globalWindow.ace.Checker) {
             this.scriptLoaded = true;
             resolve();
           } else {
-            console.error('[Storybook A11y] window.ace:', (window as any).ace);
+            console.error('[Storybook A11y] window.ace:', globalWindow.ace);
             reject(new Error('Script loaded but window.ace not found'));
           }
         }, 100);
@@ -100,7 +109,8 @@ export class EqualAccessAdapter implements IA11yEngine {
       await this.loadEngineScript();
 
       // Access the global ace object
-      const ace = (window as any).ace;
+      const globalWindow = window as Window & { ace?: { Checker: typeof Checker; engine: unknown } };
+      const ace = globalWindow.ace;
 
       if (!ace || !ace.Checker) {
         throw new Error('IBM Equal Access engine not found on window.ace');
@@ -110,7 +120,10 @@ export class EqualAccessAdapter implements IA11yEngine {
       this.initialized = true;
 
       // Initialize rule provider
-      this.ruleProvider = new EqualAccessRuleProvider({ engine: ace, Checker: ace.Checker });
+      this.ruleProvider = new EqualAccessRuleProvider({
+        engine: ace as unknown as { getRulesIds: () => string[]; getRule: (ruleId: string) => unknown },
+        Checker: ace.Checker
+      });
       
       console.log(`[Storybook A11y] ✓ IBM Equal Access engine loaded (v${this.version})`);
     } catch (error) {
@@ -232,9 +245,10 @@ export class EqualAccessAdapter implements IA11yEngine {
   private prepareGuidelineIds(config: A11yEngineConfig): string[] | undefined {
     // Check if engine-specific options specify guidelines
     if (config.engineOptions?.guidelines) {
-      return Array.isArray(config.engineOptions.guidelines)
-        ? config.engineOptions.guidelines
-        : [config.engineOptions.guidelines];
+      const guidelines = config.engineOptions.guidelines;
+      return Array.isArray(guidelines)
+        ? (guidelines as string[])
+        : [String(guidelines)];
     }
 
     // Default to IBM_Accessibility guideline
@@ -242,7 +256,7 @@ export class EqualAccessAdapter implements IA11yEngine {
   }
 
   /** Configure rules based on config */
-  private configureRules(rules: { [ruleId: string]: { enabled: boolean; options?: any } }): void {
+  private configureRules(rules: { [ruleId: string]: { enabled: boolean; options?: Record<string, unknown> } }): void {
     if (!this.checker) {
       return;
     }
@@ -259,7 +273,7 @@ export class EqualAccessAdapter implements IA11yEngine {
   /** Convert IBM Equal Access results to normalized format */
   private convertResults(report: EqualAccessReport, executionTime: number): A11yReport {
     // First, convert all issues to determine their category
-    const allIssues = report.results.map((issue: any) => this.convertIssue(issue, report.nls));
+    const allIssues = report.results.map((issue: EqualAccessIssue) => this.convertIssue(issue, report.nls));
 
     // Categorize issues first
     // Items with POTENTIAL or MANUAL confidence should only appear in incomplete, not in violations/warnings
@@ -375,7 +389,7 @@ export class EqualAccessAdapter implements IA11yEngine {
   private convertNode(issue: EqualAccessIssue): A11yIssueNode {
     // Generate CSS selector from the actual element
     // IBM Equal Access provides the element reference in issue.node
-    const cssSelector = this.generateCssSelector(issue.node);
+    const cssSelector = this.generateCssSelector(issue.node as Element);
 
     return {
       html: issue.snippet,
@@ -492,7 +506,7 @@ export class EqualAccessAdapter implements IA11yEngine {
     // Build the fragment with issue details that help.js expects
     const fragment = {
       message: issue.message,
-      msgArgs: issue.msgArgs || [],
+      msgArgs: (issue as unknown as { msgArgs?: string[] }).msgArgs || [],
       value: issue.value,
       reasonId: issue.reasonId,
       snippet: issue.snippet, // Include snippet for "Element location" section
