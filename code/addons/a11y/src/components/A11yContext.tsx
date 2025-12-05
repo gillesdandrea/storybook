@@ -321,7 +321,29 @@ export const A11yContextProvider: FC<PropsWithChildren> = (props) => {
   }, []);
 
   const handleJumpToElement = useCallback(
-    (target: string) => emit(SCROLL_INTO_VIEW, target),
+    (target: string) => {
+      // Check if this is an unhighlighted selector (like body, html, main)
+      if (unhighlightedSelectors.includes(target)) {
+        // For unhighlighted selectors, we still scroll but also show a temporary highlight
+        // by temporarily highlighting and then removing it
+        emit(HIGHLIGHT, {
+          id: `${ADDON_ID}/temp-highlight`,
+          selectors: [target],
+          styles: {
+            outline: '2px solid #FF6B6B',
+            backgroundColor: 'rgba(255, 107, 107, 0.1)',
+          },
+        });
+        
+        // Remove the highlight after a short delay
+        setTimeout(() => {
+          emit(REMOVE_HIGHLIGHT, `${ADDON_ID}/temp-highlight`);
+        }, 2000);
+      }
+      
+      // Always emit scroll into view
+      emit(SCROLL_INTO_VIEW, target);
+    },
     [emit]
   );
 

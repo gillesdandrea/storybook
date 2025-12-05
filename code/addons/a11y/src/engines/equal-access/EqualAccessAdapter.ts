@@ -258,33 +258,40 @@ export class EqualAccessAdapter implements IA11yEngine {
 
   /** Convert IBM Equal Access results to normalized format */
   private convertResults(report: EqualAccessReport, executionTime: number): A11yReport {
-    const issues = report.results.map((issue: any) => this.convertIssue(issue, report.nls));
+    // First, convert all issues to determine their category
+    const allIssues = report.results.map((issue: any) => this.convertIssue(issue, report.nls));
 
-    // Categorize issues
+    // Categorize issues first
     // Items with POTENTIAL or MANUAL confidence should only appear in incomplete, not in violations/warnings
-    const incomplete = issues.filter(
+    const incompleteIssues = allIssues.filter(
       (i: A11yIssue) =>
         i.confidence === A11yConfidence.POTENTIAL || i.confidence === A11yConfidence.MANUAL
     );
     
-    const violations = issues.filter(
+    const violationIssues = allIssues.filter(
       (i: A11yIssue) =>
         i.severity === A11ySeverity.VIOLATION &&
         i.confidence !== A11yConfidence.POTENTIAL &&
         i.confidence !== A11yConfidence.MANUAL
     );
     
-    const warnings = issues.filter(
+    const warningIssues = allIssues.filter(
       (i: A11yIssue) =>
         i.severity === A11ySeverity.WARNING &&
         i.confidence !== A11yConfidence.POTENTIAL &&
         i.confidence !== A11yConfidence.MANUAL
     );
     
-    const passes = issues.filter(
+    const passIssues = allIssues.filter(
       (i: A11yIssue) =>
         i.severity === A11ySeverity.INFORMATION && i.confidence === A11yConfidence.CERTAIN
     );
+
+    // Now group each category by ruleId
+    const incomplete = this.groupIssuesByRuleId(incompleteIssues);
+    const violations = this.groupIssuesByRuleId(violationIssues);
+    const warnings = this.groupIssuesByRuleId(warningIssues);
+    const passes = this.groupIssuesByRuleId(passIssues);
 
     return {
       engine: this.type,
@@ -309,6 +316,26 @@ export class EqualAccessAdapter implements IA11yEngine {
     };
   }
 
+  /** Group issues by ruleId, combining nodes from issues with the same rule */
+  private groupIssuesByRuleId(issues: A11yIssue[]): A11yIssue[] {
+    const issuesByRuleId = new Map<string, A11yIssue>();
+    
+    for (const issue of issues) {
+      const ruleId = issue.ruleId;
+      
+      if (issuesByRuleId.has(ruleId)) {
+        // Add nodes to existing issue
+        const existingIssue = issuesByRuleId.get(ruleId)!;
+        existingIssue.nodes.push(...issue.nodes);
+      } else {
+        // Create new entry with this issue
+        issuesByRuleId.set(ruleId, issue);
+      }
+    }
+    
+    return Array.from(issuesByRuleId.values());
+  }
+
   /** Convert a single IBM Equal Access issue to normalized format */
   private convertIssue(issue: EqualAccessIssue, nls?: EqualAccessReport['nls']): A11yIssue {
     const [policy, confidence] = issue.value;
@@ -316,15 +343,17 @@ export class EqualAccessAdapter implements IA11yEngine {
     // Get help URL with full issue context
     const helpUrl = this.getHelpUrl(issue);
 
-    // Get short description (group message) and detailed message
-    const shortDescription = this.getGroupMessage(issue, nls);
-    const detailedMessage = this.getMessage(issue, nls);
+    // Get rule title and description
+    // Title: specific failure message (e.g., "Content is not within a landmark element")
+    // Description: general rule description (e.g., "All content must reside within an element with a landmark role")
+    const ruleTitle = this.getRuleTitle(issue, nls);
+    const ruleDescription = this.getRuleDescription(issue, nls);
 
     return {
       id: issue.ruleId, // Use just the rule ID for cleaner display
       ruleId: issue.ruleId,
-      description: shortDescription, // Short description for list view
-      help: detailedMessage, // Detailed message for help text
+      description: ruleDescription, // General description for details panel
+      help: ruleDescription, // Same description for help text
       helpUrl,
       severity: this.mapSeverity(policy, confidence),
       confidence: this.mapConfidence(confidence),
@@ -332,6 +361,7 @@ export class EqualAccessAdapter implements IA11yEngine {
       nodes: [this.convertNode(issue)],
       engine: this.type,
       engineSpecific: {
+        title: ruleTitle, // Specific failure message for list display
         policy,
         confidence,
         reasonId: issue.reasonId,
@@ -471,6 +501,91 @@ export class EqualAccessAdapter implements IA11yEngine {
     const encodedFragment = encodeURIComponent(JSON.stringify(fragment));
 
     return `https://unpkg.com/accessibility-checker-engine@${this.version}/help/en-US/${issue.ruleId}.html#${encodedFragment}`;
+  }
+
+  /** Get rule title from engine metadata */
+  private getRuleTitle(issue: EqualAccessIssue, nls?: EqualAccessReport['nls']): string {
+    console.log('[EqualAccess getRuleTitle] Processing issue:', {
+      ruleId: issue.ruleId,
+      reasonId: issue.reasonId,
+      message: issue.message,
+      hasChecker: !!this.checker,
+      hasEngine: !!(this.checker && this.checker.engine),
+      hasNLS: !!nls
+    });
+
+    // Try to get the specific message for this reasonId from the engine's rule metadata
+    if (this.checker && this.checker.engine) {
+      try {
+        const rule = this.checker.engine.getRule(issue.ruleId);
+        console.log('[EqualAccess getRuleTitle] Rule from engine:', rule);
+        
+        if (rule && rule.messages && rule.messages['en-US']) {
+          console.log('[EqualAccess getRuleTitle] Available messages:', Object.keys(rule.messages['en-US']));
+          
+          // Try specific reasonId message first
+          if (issue.reasonId) {
+            const specificMessage = rule.messages['en-US'][issue.reasonId];
+            console.log('[EqualAccess getRuleTitle] Specific message for', issue.reasonId, ':', specificMessage);
+            if (specificMessage && specificMessage !== 'Rule Passed') {
+              console.log('[EqualAccess getRuleTitle] ✓ Using specific message');
+              return specificMessage;
+            }
+          }
+          // Fall back to group message if reasonId message not found
+          if (rule.messages['en-US'].group) {
+            console.log('[EqualAccess getRuleTitle] ✓ Using group message:', rule.messages['en-US'].group);
+            return rule.messages['en-US'].group;
+          }
+        }
+      } catch (error) {
+        console.warn('[EqualAccess getRuleTitle] Error getting rule from engine:', error);
+      }
+    }
+
+    // Try to get from NLS data in the report
+    if (nls && issue.ruleId in nls) {
+      console.log('[EqualAccess getRuleTitle] NLS data for rule:', nls[issue.ruleId]);
+      
+      // Try specific reasonId message first
+      if (issue.reasonId && issue.reasonId in nls[issue.ruleId]) {
+        console.log('[EqualAccess getRuleTitle] ✓ Using NLS specific message');
+        return nls[issue.ruleId][issue.reasonId];
+      }
+      // Fall back to group message
+      if ('group' in nls[issue.ruleId]) {
+        console.log('[EqualAccess getRuleTitle] ✓ Using NLS group message');
+        return nls[issue.ruleId].group;
+      }
+    }
+
+    // Fall back to issue message or rule ID
+    console.log('[EqualAccess getRuleTitle] ✗ Falling back to:', issue.message || issue.ruleId);
+    return issue.message || issue.ruleId;
+  }
+
+  /** Get the group description (general rule description) */
+  private getRuleDescription(issue: EqualAccessIssue, nls?: EqualAccessReport['nls']): string {
+    // Try to get the group message from the engine's rule metadata
+    // This gives us the general description like "All content must reside within an element with a landmark role"
+    if (this.checker && this.checker.engine) {
+      try {
+        const rule = this.checker.engine.getRule(issue.ruleId);
+        if (rule && rule.messages && rule.messages['en-US'] && rule.messages['en-US'].group) {
+          return rule.messages['en-US'].group;
+        }
+      } catch (error) {
+        // Fall through to NLS data
+      }
+    }
+
+    // Try to get from NLS data in the report
+    if (nls && issue.ruleId in nls && 'group' in nls[issue.ruleId]) {
+      return nls[issue.ruleId].group;
+    }
+
+    // Fall back to getMessage
+    return this.getMessage(issue, nls);
   }
 
   /** Get short group message for an issue (used as description) */

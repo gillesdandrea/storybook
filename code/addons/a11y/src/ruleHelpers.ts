@@ -49,21 +49,38 @@ function getRuleMetadata(ruleId: string): A11yRuleMetadata | undefined {
 
 /**
  * Get the display title for a rule result
- * 
+ *
  * Priority:
- * 1. Registry cache (if initialized)
- * 2. AccessibilityRuleMaps (legacy)
- * 3. Rule ID (fallback)
+ * 1. Engine-specific title (Equal Access stores title here)
+ * 2. Registry cache (if initialized)
+ * 3. AccessibilityRuleMaps (legacy)
+ * 4. Rule ID (fallback)
  */
 export const getRuleTitle = (result: EnhancedResult): string => {
-  // Try registry cache first
+  console.log('[ruleHelpers getRuleTitle] Processing result:', {
+    id: result.id,
+    hasEngineSpecific: !!(result as any).engineSpecific,
+    engineSpecificTitle: (result as any).engineSpecific?.title,
+    description: result.description
+  });
+
+  // Check if result has engine-specific title (Equal Access stores it here)
+  if ((result as any).engineSpecific?.title) {
+    console.log('[ruleHelpers getRuleTitle] ✓ Using engineSpecific.title:', (result as any).engineSpecific.title);
+    return (result as any).engineSpecific.title;
+  }
+  
+  // Try registry cache
   const metadata = getRuleMetadata(result.id);
   if (metadata) {
+    console.log('[ruleHelpers getRuleTitle] ✓ Using registry cache title:', metadata.title);
     return metadata.title;
   }
   
   // Fallback to legacy maps
-  return combinedRulesMap[result.id]?.title || result.id;
+  const legacyTitle = combinedRulesMap[result.id]?.title || result.id;
+  console.log('[ruleHelpers getRuleTitle] ✓ Using legacy/fallback:', legacyTitle);
+  return legacyTitle;
 };
 
 /**
@@ -140,4 +157,3 @@ export const isRuleCacheInitialized = (): boolean => {
 export const getTitleForAxeResult = getRuleTitle;
 export const getFriendlySummaryForAxeResult = getRuleSummary;
 
-// Made with Bob

@@ -230,6 +230,8 @@ function convertIssueToResult(issue: any): any {
       target: node.target,
       xpath: node.xpath,
     })),
+    // Preserve engineSpecific data for Equal Access and other engines
+    engineSpecific: issue.engineSpecific,
   };
 }
 
