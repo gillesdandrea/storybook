@@ -19,4 +19,3 @@ export { EngineRegistry } from './EngineRegistry';
 export { AxeCoreAdapter } from './axe-core/AxeCoreAdapter';
 export { EqualAccessAdapter } from './equal-access/EqualAccessAdapter';
 
-// Made with Bob

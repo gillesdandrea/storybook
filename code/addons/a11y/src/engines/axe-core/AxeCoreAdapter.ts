@@ -296,4 +296,3 @@ export class AxeCoreAdapter implements IA11yEngine {
   }
 }
 
-// Made with Bob

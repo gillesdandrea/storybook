@@ -468,4 +468,3 @@ export class EqualAccessAdapter implements IA11yEngine {
   }
 }
 
-// Made with Bob

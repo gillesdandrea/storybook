@@ -62,4 +62,3 @@ export interface A11yParameters {
   element?: never;
 }
 
-// Made with Bob
