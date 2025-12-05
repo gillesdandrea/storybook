@@ -1,5 +1,5 @@
 import type { FC, PropsWithChildren } from 'react';
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   STORY_CHANGED,
@@ -24,8 +24,10 @@ import {
 import type { Report } from 'storybook/preview-api';
 import { convert, themes } from 'storybook/theming';
 
-import { getFriendlySummaryForAxeResult, getTitleForAxeResult } from '../axeRuleMappingHelper';
+import { ensureRuleCacheInitialized, updateRuleCache } from '../ruleCache';
+import { getFriendlySummaryForAxeResult, getTitleForAxeResult } from '../ruleHelpers';
 import { ADDON_ID, EVENTS, STATUS_TYPE_ID_A11Y, STATUS_TYPE_ID_COMPONENT_TEST } from '../constants';
+import type { A11yRuleMetadata } from '../rules/types';
 import type { A11yParameters } from '../params';
 import type { A11YReport, EnhancedResult, EnhancedResults, Status } from '../types';
 import { RuleType } from '../types';
@@ -87,6 +89,13 @@ export const A11yContext = createContext<A11yContextStore>({
 });
 
 export const A11yContextProvider: FC<PropsWithChildren> = (props) => {
+  // Initialize rule cache once on mount
+  const cacheInitialized = useRef(false);
+  if (!cacheInitialized.current) {
+    ensureRuleCacheInitialized();
+    cacheInitialized.current = true;
+  }
+
   const parameters = useParameter<A11yParameters>('a11y', {});
 
   const [globals] = useGlobals() ?? [];
@@ -228,8 +237,13 @@ export const A11yContextProvider: FC<PropsWithChildren> = (props) => {
       const { helpUrl, nodes } = results?.[type as RuleType]?.find((r) => r.id === id) || {};
       const openedWindow = helpUrl && window.open(helpUrl, '_blank', 'noopener,noreferrer');
       if (nodes && !openedWindow) {
-        const index =
-          nodes.findIndex((n) => details.selectors.some((s) => s === String(n.target))) ?? -1;
+        const index = nodes.findIndex((n) =>
+          details.selectors.some((selector) =>
+            Array.isArray(n.target)
+              ? n.target.includes(selector)
+              : n.target === selector
+          )
+        ) ?? -1;
         if (index !== -1) {
           const key = `${type}.${id}.${index + 1}`;
           setSelectedItems(new Map([[`${type}.${id}`, key]]));
@@ -272,11 +286,19 @@ export const A11yContextProvider: FC<PropsWithChildren> = (props) => {
     [manual, setState]
   );
 
+  const handleRulesMetadata = useCallback(
+    (rules: A11yRuleMetadata[]) => {
+      updateRuleCache(rules);
+    },
+    []
+  );
+
   const emit = useChannel(
     {
       [EVENTS.RESULT]: handleResult,
       [EVENTS.ERROR]: handleError,
       [EVENTS.SELECT]: handleSelect,
+      [EVENTS.RULES_METADATA]: handleRulesMetadata,
       [STORY_CHANGED]: () => setSelectedItems(new Map()),
       [STORY_RENDER_PHASE_CHANGED]: handleReset,
       [STORY_FINISHED]: handleReport,

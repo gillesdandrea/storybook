@@ -7,6 +7,7 @@ import type {
   A11yReport,
   IA11yEngine,
 } from '../types';
+import { EqualAccessRuleProvider } from '../../rules/providers/EqualAccessRuleProvider';
 
 // IBM Equal Access types - using 'any' for now to avoid type conflicts
 // The actual types will be resolved when the package is installed
@@ -37,6 +38,7 @@ export class EqualAccessAdapter implements IA11yEngine {
   private checker: EqualAccessChecker | null = null;
   private initialized: boolean = false;
   private scriptLoaded: boolean = false;
+  private ruleProvider: EqualAccessRuleProvider | null = null;
 
   /** Load the IBM Equal Access engine script */
   private async loadEngineScript(): Promise<void> {
@@ -107,6 +109,9 @@ export class EqualAccessAdapter implements IA11yEngine {
       this.checker = new ace.Checker();
       this.initialized = true;
 
+      // Initialize rule provider
+      this.ruleProvider = new EqualAccessRuleProvider({ engine: ace, Checker: ace.Checker });
+      
       console.log(`[Storybook A11y] ✓ IBM Equal Access engine loaded (v${this.version})`);
     } catch (error) {
       console.error('[Storybook A11y] ✗ Failed to load IBM Equal Access engine:', error);
@@ -193,6 +198,17 @@ export class EqualAccessAdapter implements IA11yEngine {
   async cleanup(): Promise<void> {
     this.checker = null;
     this.initialized = false;
+    this.ruleProvider = null;
+  }
+
+  /** Get the rule provider for this engine */
+  getRuleProvider(): EqualAccessRuleProvider | null {
+    return this.ruleProvider;
+  }
+
+  /** Get the underlying checker instance (for advanced usage) */
+  getCheckerInstance(): EqualAccessChecker | null {
+    return this.checker;
   }
 
   /** Get the root node from context */
@@ -245,15 +261,29 @@ export class EqualAccessAdapter implements IA11yEngine {
     const issues = report.results.map((issue: any) => this.convertIssue(issue, report.nls));
 
     // Categorize issues
-    const violations = issues.filter((i: A11yIssue) => i.severity === A11ySeverity.VIOLATION);
-    const warnings = issues.filter((i: A11yIssue) => i.severity === A11ySeverity.WARNING);
-    const passes = issues.filter(
-      (i: A11yIssue) =>
-        i.severity === A11ySeverity.INFORMATION && i.confidence === A11yConfidence.CERTAIN
-    );
+    // Items with POTENTIAL or MANUAL confidence should only appear in incomplete, not in violations/warnings
     const incomplete = issues.filter(
       (i: A11yIssue) =>
         i.confidence === A11yConfidence.POTENTIAL || i.confidence === A11yConfidence.MANUAL
+    );
+    
+    const violations = issues.filter(
+      (i: A11yIssue) =>
+        i.severity === A11ySeverity.VIOLATION &&
+        i.confidence !== A11yConfidence.POTENTIAL &&
+        i.confidence !== A11yConfidence.MANUAL
+    );
+    
+    const warnings = issues.filter(
+      (i: A11yIssue) =>
+        i.severity === A11ySeverity.WARNING &&
+        i.confidence !== A11yConfidence.POTENTIAL &&
+        i.confidence !== A11yConfidence.MANUAL
+    );
+    
+    const passes = issues.filter(
+      (i: A11yIssue) =>
+        i.severity === A11ySeverity.INFORMATION && i.confidence === A11yConfidence.CERTAIN
     );
 
     return {

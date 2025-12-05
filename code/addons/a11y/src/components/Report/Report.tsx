@@ -8,7 +8,7 @@ import { ChevronSmallDownIcon } from '@storybook/icons';
 import type { ImpactValue } from 'axe-core';
 import { styled } from 'storybook/theming';
 
-import { getTitleForAxeResult } from '../../axeRuleMappingHelper';
+import { getTitleForAxeResult } from '../../ruleHelpers';
 import { type EnhancedResult, RuleType } from '../../types';
 import { Details } from './Details';
 

@@ -236,6 +236,25 @@ function convertIssueToResult(issue: any): any {
 channel.on(EVENTS.MANUAL, async (storyId: string, input: A11yParameters = DEFAULT_PARAMETERS) => {
   try {
     await waitForAnimations();
+    
+    // Get the engine and its rule provider
+    const engineType = (input.engine || 'axe-core') as A11yEngineType;
+    const engine = await EngineRegistry.getOrInitialize(engineType);
+    // Cast to access getRuleProvider (not in IA11yEngine interface but available on adapters)
+    const provider = (engine as any).getRuleProvider?.();
+    
+    // Send rule metadata to manager if provider is available
+    if (provider) {
+      try {
+        const rules = await provider.getAllRules();
+        // Serialize rules to avoid telejson issues
+        const rulesJson = JSON.parse(JSON.stringify(rules));
+        channel.emit(EVENTS.RULES_METADATA, rulesJson, engineType);
+      } catch (error) {
+        console.warn('[Storybook A11y] Failed to send rule metadata:', error);
+      }
+    }
+    
     const result = await run(input, storyId);
     // Axe result contains class instances, which telejson deserializes in a
     // way that violates:

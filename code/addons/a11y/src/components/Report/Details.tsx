@@ -7,7 +7,7 @@ import { CheckIcon, CopyIcon, LocationIcon } from '@storybook/icons';
 import * as Tabs from '@radix-ui/react-tabs';
 import { styled } from 'storybook/theming';
 
-import { getFriendlySummaryForAxeResult } from '../../axeRuleMappingHelper';
+import { getFriendlySummaryForAxeResult } from '../../ruleHelpers';
 import type { EnhancedNodeResult, EnhancedResult, RuleType } from '../../types';
 import { useA11yContext } from '../A11yContext';
 
@@ -203,7 +203,15 @@ function getContent(node: EnhancedNodeResult) {
       </Messages>
 
       <Actions>
-        <Button ariaLabel={false} onClick={() => handleJumpToElement(node.target.toString())}>
+        <Button ariaLabel={false} onClick={() => {
+          // Convert target to string - handle both string and ShadowDomSelector types
+          const targetSelector = Array.isArray(node.target)
+            ? node.target[0]
+            : typeof node.target === 'string'
+              ? node.target
+              : (node.target as any)?.selector || String(node.target);
+          handleJumpToElement(targetSelector);
+        }}>
           <LocationIcon /> Jump to element
         </Button>
         <CopyButton onClick={() => handleCopyLink(node.linkPath)} />

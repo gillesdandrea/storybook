@@ -12,6 +12,7 @@ import type {
   A11ySeverity,
   IA11yEngine,
 } from '../types';
+import { AxeCoreRuleProvider } from '../../rules/providers/AxeCoreRuleProvider';
 
 /**
  * Adapter for axe-core accessibility engine Maintains full backward compatibility with existing
@@ -22,6 +23,7 @@ export class AxeCoreAdapter implements IA11yEngine {
 
   private axe: any = null;
   private initialized = false;
+  private ruleProvider: AxeCoreRuleProvider | null = null;
 
   get version(): string {
     return this.axe?.version || 'unknown';
@@ -45,6 +47,10 @@ export class AxeCoreAdapter implements IA11yEngine {
       }
 
       this.initialized = true;
+      
+      // Initialize rule provider
+      this.ruleProvider = new AxeCoreRuleProvider(this.axe);
+      
       console.log(`[Storybook A11y] ✓ axe-core engine loaded (v${this.version})`);
     } catch (error) {
       console.error('[Storybook A11y] ✗ Failed to load axe-core engine:', error);
@@ -111,6 +117,16 @@ export class AxeCoreAdapter implements IA11yEngine {
       console.warn('Failed to get axe-core rules:', error);
       return [];
     }
+  }
+
+  /** Get the rule provider for this engine */
+  getRuleProvider(): AxeCoreRuleProvider | null {
+    return this.ruleProvider;
+  }
+
+  /** Get the underlying axe instance (for advanced usage) */
+  getAxeInstance(): any {
+    return this.axe;
   }
 
   /** Cleanup axe-core resources */
