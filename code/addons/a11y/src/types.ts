@@ -50,6 +50,10 @@ export type EnhancedResults = Omit<AxeResults, 'incomplete' | 'passes' | 'violat
   incomplete: EnhancedResult[];
   passes: EnhancedResult[];
   violations: EnhancedResult[];
+  testEngine?: {
+    name: string;
+    version?: string;
+  };
 };
 
 export interface A11yTypes {

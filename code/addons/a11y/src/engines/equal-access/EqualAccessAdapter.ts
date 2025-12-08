@@ -160,18 +160,13 @@ export class EqualAccessAdapter implements IA11yEngine {
       // Prepare guideline IDs (rulesets)
       const guidelineIds = this.prepareGuidelineIds(config);
 
-      // Configure rules if specified
-      if (config.rules) {
-        this.configureRules(config.rules);
-      }
-
-      // Run the check
+      // Run the check (don't configure rules before check as it affects the checker globally)
       const report = await this.checker.check(root, guidelineIds);
 
       const executionTime = performance.now() - startTime;
 
-      // Convert to normalized format
-      return this.convertResults(report, executionTime);
+      // Convert to normalized format and filter results based on rule configuration
+      return this.convertResults(report, executionTime, config.rules);
     } catch (error) {
       throw new Error(
         `IBM Equal Access execution failed: ${
@@ -255,25 +250,25 @@ export class EqualAccessAdapter implements IA11yEngine {
     return ['IBM_Accessibility'];
   }
 
-  /** Configure rules based on config */
-  private configureRules(rules: { [ruleId: string]: { enabled: boolean; options?: Record<string, unknown> } }): void {
-    if (!this.checker) {
-      return;
-    }
-
-    for (const [ruleId, ruleConfig] of Object.entries(rules)) {
-      if (ruleConfig.enabled === false) {
-        this.checker.disableRule(ruleId);
-      } else {
-        this.checker.enableRule(ruleId);
-      }
-    }
-  }
 
   /** Convert IBM Equal Access results to normalized format */
-  private convertResults(report: EqualAccessReport, executionTime: number): A11yReport {
+  private convertResults(
+    report: EqualAccessReport,
+    executionTime: number,
+    rulesConfig?: { [ruleId: string]: { enabled: boolean; options?: Record<string, unknown> } }
+  ): A11yReport {
     // First, convert all issues to determine their category
-    const allIssues = report.results.map((issue: EqualAccessIssue) => this.convertIssue(issue, report.nls));
+    let allIssues = report.results.map((issue: EqualAccessIssue) => this.convertIssue(issue, report.nls));
+    
+    // Filter out issues for rules that are explicitly disabled
+    if (rulesConfig) {
+      allIssues = allIssues.filter((issue: A11yIssue) => {
+        const ruleConfig = rulesConfig[issue.ruleId];
+        // Only filter out if explicitly disabled (enabled === false)
+        // If not in config or enabled === true, keep the issue
+        return !ruleConfig || ruleConfig.enabled !== false;
+      });
+    }
 
     // Categorize issues first
     // Items with POTENTIAL or MANUAL confidence should only appear in incomplete, not in violations/warnings
@@ -372,7 +367,7 @@ export class EqualAccessAdapter implements IA11yEngine {
       severity: this.mapSeverity(policy, confidence),
       confidence: this.mapConfidence(confidence),
       tags: issue.category ? [issue.category] : [],
-      nodes: [this.convertNode(issue)],
+      nodes: [this.convertNode(issue, ruleTitle)],
       engine: this.type,
       engineSpecific: {
         title: ruleTitle, // Specific failure message for list display
@@ -386,7 +381,7 @@ export class EqualAccessAdapter implements IA11yEngine {
   }
 
   /** Convert IBM Equal Access issue node to normalized format */
-  private convertNode(issue: EqualAccessIssue): A11yIssueNode {
+  private convertNode(issue: EqualAccessIssue, specificMessage: string): A11yIssueNode {
     // Generate CSS selector from the actual element
     // IBM Equal Access provides the element reference in issue.node
     const cssSelector = this.generateCssSelector(issue.node as Element);
@@ -397,7 +392,12 @@ export class EqualAccessAdapter implements IA11yEngine {
       xpath: issue.path.xpath || issue.path.dom || undefined,
       bounds: issue.bounds,
       // Add axe-core compatibility properties for Details component
-      any: [],
+      // Store the specific error message in the 'any' array so Details can display it
+      any: [{
+        id: String(issue.reasonId || issue.ruleId),
+        message: specificMessage,
+        data: { reasonId: issue.reasonId }
+      }],
       all: [],
       none: [],
     };

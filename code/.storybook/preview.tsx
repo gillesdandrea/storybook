@@ -33,6 +33,7 @@ import { DocsPageWrapper } from '../addons/docs/src/blocks/components';
 import * as templatePreview from '../core/template/stories/preview';
 import '../renderers/react/template/components/index';
 import { isChromatic } from './isChromatic';
+import { rules } from '../lib/eslint-plugin/src';
 
 sb.mock('../core/template/stories/test/ModuleMocking.utils.ts');
 sb.mock('../core/template/stories/test/ModuleSpyMocking.utils.ts', { spy: true });
@@ -424,6 +425,7 @@ export default definePreview({
       //       id: 'color-contrast',
       //       enabled: true,
       //     },
+      //     { id: 'landmark-one-main', enabled: true }
       //   ],
       // },
       
@@ -432,6 +434,9 @@ export default definePreview({
       config: {
         policies: ['IBM_Accessibility'],
         // Other available policies: 'WCAG_2_1', 'WCAG_2_0'
+        rules: [
+          { id: 'skip_main_exists', enabled: false }
+        ]
       },
     },
   },

@@ -1,4 +1,4 @@
-import React, { Fragment, useCallback, useState } from 'react';
+import React, { Fragment, useCallback, useMemo, useState } from 'react';
 
 import { Button, Link, SyntaxHighlighter } from 'storybook/internal/components';
 
@@ -107,6 +107,24 @@ const Messages = styled.div({
   gap: 10,
 });
 
+const MessageGroup = styled.div(({ theme }) => ({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 15,
+  padding: '15px 0',
+  borderTop: `1px solid ${theme.appBorderColor}`,
+  '&:first-of-type': {
+    borderTop: 'none',
+    paddingTop: 0,
+  },
+}));
+
+const MessageGroupTitle = styled.div(({ theme }) => ({
+  fontWeight: theme.typography.weight.bold,
+  color: theme.color.defaultText,
+  marginBottom: 10,
+}));
+
 const Actions = styled.div({
   display: 'flex',
   gap: 10,
@@ -137,56 +155,105 @@ interface DetailsProps {
   handleSelectionChange: (key: string) => void;
 }
 
-export const Details = ({ id, item, type, selection, handleSelectionChange }: DetailsProps) => (
-  <Wrapper id={id}>
-    <Info>
-      <RuleId>{item.id}</RuleId>
-      <Description>
-        {getFriendlySummaryForAxeResult(item)}{' '}
-        <Link href={item.helpUrl} target="_blank" rel="noopener noreferrer" withArrow>
-          Learn how to resolve this violation
-        </Link>
-      </Description>
-    </Info>
+export const Details = ({ id, item, type, selection, handleSelectionChange }: DetailsProps) => {
+  // Group nodes by their specific error message (for Equal Access multi-message rules)
+  const nodeGroups = useMemo(() => {
+    const groups = new Map<string, { message: string; nodes: Array<{ node: EnhancedNodeResult; index: number }> }>();
+    
+    item.nodes.forEach((node, index) => {
+      // Get the specific error message from the node's 'any' array (Equal Access stores it there)
+      const errorMessage = node.any && node.any.length > 0 ? node.any[0].message : '';
+      
+      if (!groups.has(errorMessage)) {
+        groups.set(errorMessage, { message: errorMessage, nodes: [] });
+      }
+      groups.get(errorMessage)!.nodes.push({ node, index });
+    });
+    
+    return Array.from(groups.values());
+  }, [item.nodes]);
 
-    <Tabs.Root
-      defaultValue={selection}
-      orientation="vertical"
-      value={selection}
-      onValueChange={handleSelectionChange}
-      asChild
-    >
-      <Columns>
-        <Tabs.List aria-label={type}>
+  // Check if we have multiple message groups (Equal Access multi-message scenario)
+  const hasMultipleMessages = nodeGroups.length > 1;
+
+  return (
+    <Wrapper id={id}>
+      <Info>
+        <RuleId>{item.id}</RuleId>
+        <Description>
+          {getFriendlySummaryForAxeResult(item)}{' '}
+          <Link href={item.helpUrl} target="_blank" rel="noopener noreferrer" withArrow>
+            Learn how to resolve this violation
+          </Link>
+        </Description>
+      </Info>
+
+      <Tabs.Root
+        defaultValue={selection}
+        orientation="vertical"
+        value={selection}
+        onValueChange={handleSelectionChange}
+        asChild
+      >
+        <Columns>
+          <Tabs.List aria-label={type}>
+            {hasMultipleMessages ? (
+              // Group nodes by message
+              nodeGroups.map((group, groupIndex) => (
+                <Fragment key={`group-${groupIndex}`}>
+                  {group.message && (
+                    <MessageGroupTitle>{group.message}</MessageGroupTitle>
+                  )}
+                  {group.nodes.map(({ node, index }) => {
+                    const key = `${type}.${item.id}.${index + 1}`;
+                    return (
+                      <Fragment key={key}>
+                        <Tabs.Trigger value={key} asChild>
+                          <Item ariaLabel={false} variant="ghost" size="medium" id={key}>
+                            {index + 1}. {node.html}
+                          </Item>
+                        </Tabs.Trigger>
+                        <Tabs.Content value={key} asChild>
+                          <Content side="left">{getContent(node)}</Content>
+                        </Tabs.Content>
+                      </Fragment>
+                    );
+                  })}
+                </Fragment>
+              ))
+            ) : (
+              // Original flat list for single-message rules
+              item.nodes.map((node, index) => {
+                const key = `${type}.${item.id}.${index + 1}`;
+                return (
+                  <Fragment key={key}>
+                    <Tabs.Trigger value={key} asChild>
+                      <Item ariaLabel={false} variant="ghost" size="medium" id={key}>
+                        {index + 1}. {node.html}
+                      </Item>
+                    </Tabs.Trigger>
+                    <Tabs.Content value={key} asChild>
+                      <Content side="left">{getContent(node)}</Content>
+                    </Tabs.Content>
+                  </Fragment>
+                );
+              })
+            )}
+          </Tabs.List>
+
           {item.nodes.map((node, index) => {
             const key = `${type}.${item.id}.${index + 1}`;
             return (
-              <Fragment key={key}>
-                <Tabs.Trigger value={key} asChild>
-                  <Item ariaLabel={false} variant="ghost" size="medium" id={key}>
-                    {index + 1}. {node.html}
-                  </Item>
-                </Tabs.Trigger>
-                <Tabs.Content value={key} asChild>
-                  <Content side="left">{getContent(node)}</Content>
-                </Tabs.Content>
-              </Fragment>
+              <Tabs.Content key={key} value={key} asChild>
+                <Content side="right">{getContent(node)}</Content>
+              </Tabs.Content>
             );
           })}
-        </Tabs.List>
-
-        {item.nodes.map((node, index) => {
-          const key = `${type}.${item.id}.${index + 1}`;
-          return (
-            <Tabs.Content key={key} value={key} asChild>
-              <Content side="right">{getContent(node)}</Content>
-            </Tabs.Content>
-          );
-        })}
-      </Columns>
-    </Tabs.Root>
-  </Wrapper>
-);
+        </Columns>
+      </Tabs.Root>
+    </Wrapper>
+  );
+};
 
 function getContent(node: EnhancedNodeResult) {
   const { handleCopyLink, handleJumpToElement } = useA11yContext();

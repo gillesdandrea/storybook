@@ -137,6 +137,26 @@ export const run = async (
     }
   }
 
+  // Handle array-based rules configuration for all engines
+  // Convert array format [{ id: 'rule1', enabled: false }] to object format { rule1: { enabled: false } }
+  if (input.config?.rules) {
+    const rulesConfig = input.config.rules as unknown as unknown[];
+    if (Array.isArray(rulesConfig)) {
+      if (!config.rules) {
+        config.rules = {};
+      }
+      for (const rule of rulesConfig) {
+        const ruleObj = rule as { id?: string; enabled?: boolean; [key: string]: unknown };
+        if (ruleObj.id) {
+          config.rules[ruleObj.id] = {
+            enabled: ruleObj.enabled !== false,
+            options: rule as Record<string, unknown>,
+          };
+        }
+      }
+    }
+  }
+
   return new Promise<A11yReport | AxeResults>((resolve, reject) => {
     const highlightsRoot = document?.getElementById('storybook-highlights-root');
     if (highlightsRoot) {

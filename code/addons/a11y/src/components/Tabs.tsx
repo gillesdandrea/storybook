@@ -21,9 +21,28 @@ const Container = styled.div({
 
 const ActionsWrapper = styled.div({
   display: 'flex',
+  alignItems: 'center',
   justifyContent: 'flex-end',
   gap: 6,
 });
+
+const EngineInfo = styled.div(({ theme }) => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap: 4,
+  fontSize: theme.typography.size.s1,
+  color: theme.textMutedColor,
+  marginRight: 8,
+}));
+
+const EngineName = styled.code(({ theme }) => ({
+  fontSize: theme.typography.size.s1,
+  fontFamily: theme.typography.fonts.mono,
+  backgroundColor: theme.background.content,
+  border: `1px solid ${theme.appBorderColor}`,
+  borderRadius: 3,
+  padding: '2px 4px',
+}));
 
 interface TabsProps {
   tabs: {
@@ -44,6 +63,7 @@ export const Tabs: React.FC<TabsProps> = ({ tabs }) => {
     allExpanded,
     handleCollapseAll,
     handleExpandAll,
+    results,
   } = useA11yContext();
 
   const theme = useTheme();
@@ -63,6 +83,14 @@ export const Tabs: React.FC<TabsProps> = ({ tabs }) => {
         onSelectionChange={(key) => setTab(key as RuleType)}
         tools={
           <ActionsWrapper>
+            {results?.testEngine && (
+              <EngineInfo>
+                <EngineName>{results.testEngine.name}</EngineName>
+                {results.testEngine.version && (
+                  <span>v{results.testEngine.version}</span>
+                )}
+              </EngineInfo>
+            )}
             <Button
               variant="ghost"
               padding="small"
