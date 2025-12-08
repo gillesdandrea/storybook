@@ -136,16 +136,22 @@ export const A11yContextProvider: FC<PropsWithChildren> = (props) => {
   );
 
   useEffect(() => {
-    const unsubscribe = experimental_getStatusStore('storybook/component-test').onAllStatusChange(
-      (statuses, previousStatuses) => {
-        const current = statuses[storyId]?.[STATUS_TYPE_ID_COMPONENT_TEST];
-        const previous = previousStatuses[storyId]?.[STATUS_TYPE_ID_COMPONENT_TEST];
-        if (current?.value === 'status-value:error' && previous?.value !== 'status-value:error') {
-          setState((prev) => ({ ...prev, status: 'component-test-error' }));
+    try {
+      const unsubscribe = experimental_getStatusStore('storybook/component-test').onAllStatusChange(
+        (statuses, previousStatuses) => {
+          const current = statuses[storyId]?.[STATUS_TYPE_ID_COMPONENT_TEST];
+          const previous = previousStatuses[storyId]?.[STATUS_TYPE_ID_COMPONENT_TEST];
+          if (current?.value === 'status-value:error' && previous?.value !== 'status-value:error') {
+            setState((prev) => ({ ...prev, status: 'component-test-error' }));
+          }
         }
-      }
-    );
-    return unsubscribe;
+      );
+      return unsubscribe;
+    } catch (error) {
+      // Status store may not exist if the addon is not installed
+      console.debug('[Storybook A11y] Component test status store not available:', error);
+      return () => {};
+    }
   }, [setState, storyId]);
 
   const handleToggleHighlight = useCallback(() => {

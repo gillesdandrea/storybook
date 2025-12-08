@@ -60,39 +60,47 @@ export class EqualAccessAdapter implements IA11yEngine {
       return;
     }
 
-    // Load the UMD bundle by creating a script tag
-    // This is the most reliable way to load UMD bundles that set globals
-    return new Promise((resolve, reject) => {
+    try {
+      // Import the raw script content using Vite's ?raw suffix
+      // This prevents Vite from processing it as an ES module
+      // @ts-ignore - Vite's ?raw suffix is not recognized by TypeScript
+      const aceRaw = await import('accessibility-checker-engine/ace.js?raw');
+      const scriptContent = aceRaw.default as string;
+      
+      if (!scriptContent) {
+        throw new Error('Failed to load raw script content');
+      }
+      
+      // Create a script element and inject the code
+      // This ensures it executes in the global scope where it can set window.ace
       const script = document.createElement('script');
-
-      // Vite serves node_modules at this path in development
-      // In production, the bundler will inline or copy the file
-      script.src = '/node_modules/accessibility-checker-engine/ace.js';
-      script.type = 'text/javascript';
-
-      script.onload = () => {
-        // Give the script time to execute and set the global
-        setTimeout(() => {
-          const globalWindow = window as Window & { ace?: { Checker: typeof Checker } };
-          if (globalWindow.ace && globalWindow.ace.Checker) {
-            this.scriptLoaded = true;
-            resolve();
-          } else {
-            console.error('[Storybook A11y] window.ace:', globalWindow.ace);
-            reject(new Error('Script loaded but window.ace not found'));
-          }
-        }, 100);
-      };
-
-      script.onerror = (error) => {
-        console.error('[Storybook A11y] Script load error:', error);
-        reject(
-          new Error(`Failed to load script from /node_modules/accessibility-checker-engine/ace.js`)
-        );
-      };
-
+      script.textContent = scriptContent;
       document.head.appendChild(script);
-    });
+      
+      // Wait for the script to execute and set globals
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Check if window.ace was set
+      const globalWindowAfter = window as Window & { ace?: { Checker: typeof Checker } };
+      if (globalWindowAfter.ace && globalWindowAfter.ace.Checker) {
+        this.scriptLoaded = true;
+        console.log('[Storybook A11y] ✓ IBM Equal Access engine loaded');
+        // Clean up the script element
+        document.head.removeChild(script);
+        return;
+      }
+      
+      // Clean up on failure
+      document.head.removeChild(script);
+      throw new Error('Script executed but window.ace not set');
+    } catch (error) {
+      console.error('[Storybook A11y] Failed to load IBM Equal Access engine:', error);
+      throw new Error(
+        `Failed to load IBM Equal Access engine: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
   }
 
   /** Initialize the IBM Equal Access engine */

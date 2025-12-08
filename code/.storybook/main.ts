@@ -167,6 +167,11 @@ const config = defineMain({
         sourcemap: process.env.CI !== 'true',
         target: BROWSER_TARGETS,
       },
+      optimizeDeps: {
+        // Exclude accessibility-checker-engine from pre-bundling
+        // It's a UMD bundle that's loaded as raw text and injected as a script
+        exclude: ['accessibility-checker-engine'],
+      },
       server: {
         watch: {
           // Something odd happens with tsconfig and nx which causes Storybook to keep reloading, so we ignore them
