@@ -539,8 +539,35 @@ export class EqualAccessAdapter implements IA11yEngine {
     return `https://unpkg.com/accessibility-checker-engine@${this.version}/help/en-US/${issue.ruleId}.html#${encodedFragment}`;
   }
 
+  /**
+   * Replace message template placeholders with actual values
+   * E.g., "{0} input and others with the name \"{1}\" are not grouped together"
+   * becomes "Radio input and others with the name \"b\" are not grouped together"
+   */
+  private fillMessageParameters(template: string, msgArgs: string[]): string {
+    if (!msgArgs || msgArgs.length === 0) {
+      return template;
+    }
+
+    let result = template;
+    msgArgs.forEach((arg, index) => {
+      // Replace {0}, {1}, etc. with actual values
+      result = result.replace(new RegExp(`\\{${index}\\}`, 'g'), arg);
+    });
+    
+    return result;
+  }
+
   /** Get rule title from engine metadata */
   private getRuleTitle(issue: EqualAccessIssue, nls?: EqualAccessReport['nls']): string {
+    // PRIORITY 1: Use issue.message if available - it already has parameters filled in by the engine
+    if (issue.message) {
+      return issue.message;
+    }
+    
+    // PRIORITY 2: Get msgArgs for parameter substitution in templates
+    const msgArgs = (issue as unknown as { msgArgs?: string[] }).msgArgs || [];
+    
     // Try to get the specific message for this reasonId from the engine's rule metadata
     if (this.checker && this.checker.engine) {
       try {
@@ -551,12 +578,12 @@ export class EqualAccessAdapter implements IA11yEngine {
           if (issue.reasonId) {
             const specificMessage = rule.messages['en-US'][issue.reasonId];
             if (specificMessage && specificMessage !== 'Rule Passed') {
-              return specificMessage;
+              return this.fillMessageParameters(specificMessage, msgArgs);
             }
           }
           // Fall back to group message if reasonId message not found
           if (rule.messages['en-US'].group) {
-            return rule.messages['en-US'].group;
+            return this.fillMessageParameters(rule.messages['en-US'].group, msgArgs);
           }
         }
       } catch (error) {
@@ -568,27 +595,30 @@ export class EqualAccessAdapter implements IA11yEngine {
     if (nls && issue.ruleId in nls) {
       // Try specific reasonId message first
       if (issue.reasonId && issue.reasonId in nls[issue.ruleId]) {
-        return nls[issue.ruleId][issue.reasonId];
+        return this.fillMessageParameters(nls[issue.ruleId][issue.reasonId], msgArgs);
       }
       // Fall back to group message
       if ('group' in nls[issue.ruleId]) {
-        return nls[issue.ruleId].group;
+        return this.fillMessageParameters(nls[issue.ruleId].group, msgArgs);
       }
     }
 
-    // Fall back to issue message or rule ID
-    return issue.message || issue.ruleId;
+    // Final fallback to rule ID
+    return issue.ruleId;
   }
 
   /** Get the group description (general rule description) */
   private getRuleDescription(issue: EqualAccessIssue, nls?: EqualAccessReport['nls']): string {
+    // Get msgArgs for parameter substitution
+    const msgArgs = (issue as unknown as { msgArgs?: string[] }).msgArgs || [];
+    
     // Try to get the group message from the engine's rule metadata
     // This gives us the general description like "All content must reside within an element with a landmark role"
     if (this.checker && this.checker.engine) {
       try {
         const rule = this.checker.engine.getRule(issue.ruleId);
         if (rule && rule.messages && rule.messages['en-US'] && rule.messages['en-US'].group) {
-          return rule.messages['en-US'].group;
+          return this.fillMessageParameters(rule.messages['en-US'].group, msgArgs);
         }
       } catch (error) {
         // Fall through to NLS data
@@ -597,7 +627,7 @@ export class EqualAccessAdapter implements IA11yEngine {
 
     // Try to get from NLS data in the report
     if (nls && issue.ruleId in nls && 'group' in nls[issue.ruleId]) {
-      return nls[issue.ruleId].group;
+      return this.fillMessageParameters(nls[issue.ruleId].group, msgArgs);
     }
 
     // Fall back to getMessage
@@ -606,9 +636,12 @@ export class EqualAccessAdapter implements IA11yEngine {
 
   /** Get short group message for an issue (used as description) */
   private getGroupMessage(issue: EqualAccessIssue, nls?: EqualAccessReport['nls']): string {
+    // Get msgArgs for parameter substitution
+    const msgArgs = (issue as unknown as { msgArgs?: string[] }).msgArgs || [];
+    
     // Try to get the group message from NLS data
     if (nls && issue.ruleId in nls && 'group' in nls[issue.ruleId]) {
-      return nls[issue.ruleId].group;
+      return this.fillMessageParameters(nls[issue.ruleId].group, msgArgs);
     }
 
     // Fall back to the detailed message if group message not available
@@ -617,12 +650,16 @@ export class EqualAccessAdapter implements IA11yEngine {
 
   /** Get detailed localized message for an issue */
   private getMessage(issue: EqualAccessIssue, nls?: EqualAccessReport['nls']): string {
+    // Get msgArgs for parameter substitution
+    const msgArgs = (issue as unknown as { msgArgs?: string[] }).msgArgs || [];
+    
     if (issue.message) {
+      // The issue.message should already have parameters filled in by the engine
       return issue.message;
     }
 
     if (nls && issue.ruleId in nls && issue.reasonId && issue.reasonId in nls[issue.ruleId]) {
-      return nls[issue.ruleId][issue.reasonId];
+      return this.fillMessageParameters(nls[issue.ruleId][issue.reasonId], msgArgs);
     }
 
     return `Rule ${issue.ruleId} failed`;
