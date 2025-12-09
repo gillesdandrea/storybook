@@ -180,3 +180,20 @@ export interface IA11yEngine {
   cleanup(): Promise<void>;
 }
 
+/**
+ * Factory function for creating engine instances
+ * Enables lazy loading of engine adapters and their dependencies
+ */
+export type EngineFactory = () => Promise<IA11yEngine>;
+
+/**
+ * Engine factory registration
+ * Used by EngineRegistry to register engine factories
+ */
+export interface EngineFactoryRegistration {
+  /** Engine type identifier */
+  type: A11yEngineType;
+  /** Factory function that creates the engine instance */
+  factory: EngineFactory;
+}
+

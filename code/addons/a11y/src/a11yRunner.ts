@@ -32,6 +32,9 @@ const DISABLED_RULES = [
 const queue: (() => Promise<void>)[] = [];
 let isRunning = false;
 
+// Track ongoing runs to prevent duplicates
+const ongoingRuns = new Map<string, Promise<A11yReport | AxeResults>>();
+
 const runNext = async () => {
   if (queue.length === 0) {
     isRunning = false;
@@ -54,12 +57,32 @@ export const run = async (
     throw new ElementA11yParameterError();
   }
 
+  // Check if there's already an ongoing run for this story
+  const ongoingRun = ongoingRuns.get(storyId);
+  if (ongoingRun) {
+    console.log(`[Storybook A11y] Reusing ongoing check for story ${storyId}`);
+    return ongoingRun;
+  }
+
   // Determine which engine to use (default to axe-core for backward compatibility)
   const engineType = (input.engine || 'axe-core') as A11yEngineType;
 
   console.log(`[Storybook A11y] Running accessibility check with ${engineType} engine`);
+  
+  // Create a placeholder promise and track it IMMEDIATELY to prevent race conditions
+  // This must happen BEFORE any async operations (like engine initialization)
+  let resolvePromise: (value: A11yReport | AxeResults) => void;
+  let rejectPromise: (reason: any) => void;
+  
+  const runPromise = new Promise<A11yReport | AxeResults>((resolve, reject) => {
+    resolvePromise = resolve;
+    rejectPromise = reject;
+  });
+  
+  // Track this run BEFORE doing anything else (especially before async operations)
+  ongoingRuns.set(storyId, runPromise);
 
-  // Get or initialize the engine
+  // Now get or initialize the engine (this is async and may take time)
   const engine = await EngineRegistry.getOrInitialize(engineType);
 
   // Prepare context
@@ -157,44 +180,51 @@ export const run = async (
     }
   }
 
-  return new Promise<A11yReport | AxeResults>((resolve, reject) => {
-    const highlightsRoot = document?.getElementById('storybook-highlights-root');
-    if (highlightsRoot) {
-      highlightsRoot.style.display = 'none';
-    }
+  // Now set up the actual work
+  const highlightsRoot = document?.getElementById('storybook-highlights-root');
+  if (highlightsRoot) {
+    highlightsRoot.style.display = 'none';
+  }
 
-    const task = async () => {
-      try {
-        const result = await engine.run(context, config);
+  const task = async () => {
+    try {
+      const result = await engine.run(context, config);
 
-        // Log results summary
-        const violationCount = result.violations?.length || 0;
-        const passCount = result.passes?.length || 0;
-        const incompleteCount = result.incomplete?.length || 0;
-        console.log(
-          `[Storybook A11y] Check complete: ${violationCount} violations, ${passCount} passes, ${incompleteCount} incomplete`
-        );
+      // Log results summary
+      const violationCount = result.violations?.length || 0;
+      const passCount = result.passes?.length || 0;
+      const incompleteCount = result.incomplete?.length || 0;
+      console.log(
+        `[Storybook A11y] Check complete: ${violationCount} violations, ${passCount} passes, ${incompleteCount} incomplete`
+      );
 
-        // Convert to AxeResults format for backward compatibility and add link paths
-        const axeResult = convertToAxeResults(result);
-        const resultWithLinks = withLinkPaths(axeResult, storyId);
-        resolve(resultWithLinks);
-      } catch (error) {
-        console.error(`[Storybook A11y] Check failed with ${engineType} engine:`, error);
-        reject(error);
-      } finally {
-        if (highlightsRoot) {
-          highlightsRoot.style.display = '';
-        }
+      // Convert to AxeResults format for backward compatibility and add link paths
+      const axeResult = convertToAxeResults(result);
+      const resultWithLinks = withLinkPaths(axeResult, storyId);
+      
+      // Clean up tracking before resolving
+      ongoingRuns.delete(storyId);
+      
+      resolvePromise!(resultWithLinks);
+    } catch (error) {
+      console.error(`[Storybook A11y] Check failed with ${engineType} engine:`, error);
+      // Clean up tracking before rejecting
+      ongoingRuns.delete(storyId);
+      rejectPromise!(error);
+    } finally {
+      if (highlightsRoot) {
+        highlightsRoot.style.display = '';
       }
-    };
-
-    queue.push(task);
-
-    if (!isRunning) {
-      runNext();
     }
-  });
+  };
+
+  queue.push(task);
+
+  if (!isRunning) {
+    runNext();
+  }
+  
+  return runPromise;
 };
 
 /** Convert normalized A11yReport back to AxeResults format for backward compatibility */
@@ -254,6 +284,7 @@ function convertIssueToResult(issue: unknown): unknown {
 
   // Fallback: construct a basic result for non-axe engines (e.g., IBM Equal Access)
   // Preserve all node properties to maintain backward compatibility
+  // But exclude DOM element references that cause circular structure errors
   return {
     id: issueObj.ruleId,
     impact: issueObj.engineSpecific?.impact,
@@ -261,12 +292,51 @@ function convertIssueToResult(issue: unknown): unknown {
     description: issueObj.description,
     help: issueObj.help,
     helpUrl: issueObj.helpUrl,
-    nodes: issueObj.nodes?.map((node) => ({
-      ...node, // Preserve all existing node properties (any, all, none, etc.)
-      html: node.html,
-      target: node.target,
-      xpath: node.xpath,
-    })),
+    nodes: issueObj.nodes?.map((node) => {
+      // Create a clean node object without DOM references
+      const cleanNode: Record<string, unknown> = {
+        html: node.html,
+        target: node.target,
+        xpath: node.xpath,
+      };
+      
+      // Preserve specific axe-core properties (any, all, none) if they exist
+      // These are arrays of check results, not DOM elements
+      if ('any' in node && Array.isArray(node.any)) {
+        cleanNode.any = node.any;
+      }
+      if ('all' in node && Array.isArray(node.all)) {
+        cleanNode.all = node.all;
+      }
+      if ('none' in node && Array.isArray(node.none)) {
+        cleanNode.none = node.none;
+      }
+      
+      // Preserve other safe properties (strings, numbers, booleans, arrays, plain objects)
+      // but skip DOM elements and functions
+      for (const [key, value] of Object.entries(node)) {
+        if (key in cleanNode) continue; // Already handled
+        
+        const valueType = typeof value;
+        if (valueType === 'function') continue; // Skip functions
+        if (value instanceof Element) continue; // Skip DOM elements
+        if (value instanceof Node) continue; // Skip DOM nodes
+        
+        // Include primitives and serializable objects
+        if (
+          value === null ||
+          valueType === 'string' ||
+          valueType === 'number' ||
+          valueType === 'boolean' ||
+          Array.isArray(value) ||
+          (valueType === 'object' && value && value.constructor === Object)
+        ) {
+          cleanNode[key] = value;
+        }
+      }
+      
+      return cleanNode;
+    }),
     // Preserve engineSpecific data for Equal Access and other engines
     engineSpecific: issueObj.engineSpecific,
   };

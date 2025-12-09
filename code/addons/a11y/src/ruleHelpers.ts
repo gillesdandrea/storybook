@@ -27,7 +27,7 @@ let ruleMetadataCache: Map<string, A11yRuleMetadata> = new Map();
  */
 export function initializeRuleCache(rules: A11yRuleMetadata[]): void {
   ruleMetadataCache = new Map(rules.map(rule => [rule.id, rule]));
-  console.log(`[Storybook A11y] Rule cache initialized with ${rules.length} rules`);
+    console.log(`[Storybook A11y] Rule cache initialized with ${rules.length} rules`);
 }
 
 /**
@@ -60,30 +60,20 @@ export const getRuleTitle = (result: EnhancedResult): string => {
   const resultWithEngine = result as EnhancedResult & {
     engineSpecific?: { title?: string };
   };
-  
-  console.log('[ruleHelpers getRuleTitle] Processing result:', {
-    id: result.id,
-    hasEngineSpecific: !!resultWithEngine.engineSpecific,
-    engineSpecificTitle: resultWithEngine.engineSpecific?.title,
-    description: result.description
-  });
 
   // Check if result has engine-specific title (Equal Access stores it here)
   if (resultWithEngine.engineSpecific?.title) {
-    console.log('[ruleHelpers getRuleTitle] ✓ Using engineSpecific.title:', resultWithEngine.engineSpecific.title);
     return resultWithEngine.engineSpecific.title;
   }
   
   // Try registry cache
   const metadata = getRuleMetadata(result.id);
   if (metadata) {
-    console.log('[ruleHelpers getRuleTitle] ✓ Using registry cache title:', metadata.title);
     return metadata.title;
   }
   
   // Fallback to legacy maps
   const legacyTitle = combinedRulesMap[result.id]?.title || result.id;
-  console.log('[ruleHelpers getRuleTitle] ✓ Using legacy/fallback:', legacyTitle);
   return legacyTitle;
 };
 

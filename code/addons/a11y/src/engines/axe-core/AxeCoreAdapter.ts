@@ -29,6 +29,7 @@ export class AxeCoreAdapter implements IA11yEngine {
     version: string;
   } | null = null;
   private initialized = false;
+  private initializing = false;
   private ruleProvider: AxeCoreRuleProvider | null = null;
 
   get version(): string {
@@ -37,9 +38,22 @@ export class AxeCoreAdapter implements IA11yEngine {
 
   /** Initialize axe-core engine Uses dynamic import to support various bundler configurations */
   async initialize(): Promise<void> {
+    // Check if already initialized
     if (this.initialized) {
       return;
     }
+
+    // Check if initialization is in progress (prevent race condition)
+    if (this.initializing) {
+      // Wait for initialization to complete
+      while (this.initializing) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      return;
+    }
+
+    // Mark as initializing to prevent concurrent initialization
+    this.initializing = true;
 
     try {
       console.log('[Storybook A11y] Loading axe-core engine...');
@@ -64,6 +78,9 @@ export class AxeCoreAdapter implements IA11yEngine {
       throw new Error(
         `Failed to initialize axe-core: ${error instanceof Error ? error.message : String(error)}`
       );
+    } finally {
+      // Always clear the initializing flag
+      this.initializing = false;
     }
   }
 

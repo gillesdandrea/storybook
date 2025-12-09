@@ -44,6 +44,7 @@ export class EqualAccessAdapter implements IA11yEngine {
 
   private checker: EqualAccessChecker | null = null;
   private initialized: boolean = false;
+  private initializing: boolean = false;
   private scriptLoaded: boolean = false;
   private ruleProvider: EqualAccessRuleProvider | null = null;
 
@@ -105,9 +106,22 @@ export class EqualAccessAdapter implements IA11yEngine {
 
   /** Initialize the IBM Equal Access engine */
   async initialize(): Promise<void> {
+    // Check if already initialized
     if (this.initialized && this.checker) {
       return;
     }
+
+    // Check if initialization is in progress (prevent race condition)
+    if (this.initializing) {
+      // Wait for initialization to complete
+      while (this.initializing) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      return;
+    }
+
+    // Mark as initializing to prevent concurrent initialization
+    this.initializing = true;
 
     try {
       console.log('[Storybook A11y] Loading IBM Equal Access engine...');
@@ -128,8 +142,9 @@ export class EqualAccessAdapter implements IA11yEngine {
       this.initialized = true;
 
       // Initialize rule provider
+      // Note: ace.engine has the getRulesIds() and getRule() methods
       this.ruleProvider = new EqualAccessRuleProvider({
-        engine: ace as unknown as { getRulesIds: () => string[]; getRule: (ruleId: string) => unknown },
+        engine: (ace as any).engine as { getRulesIds: () => string[]; getRule: (ruleId: string) => unknown },
         Checker: ace.Checker
       });
       
@@ -141,6 +156,9 @@ export class EqualAccessAdapter implements IA11yEngine {
           error instanceof Error ? error.message : String(error)
         }`
       );
+    } finally {
+      // Always clear the initializing flag
+      this.initializing = false;
     }
   }
 
@@ -151,12 +169,8 @@ export class EqualAccessAdapter implements IA11yEngine {
 
   /** Run accessibility check using IBM Equal Access */
   async run(context: A11yContext, config: A11yEngineConfig): Promise<A11yReport> {
-    if (!this.isReady()) {
-      await this.initialize();
-    }
-
     if (!this.checker) {
-      throw new Error('IBM Equal Access engine not initialized');
+      throw new Error('IBM Equal Access engine not initialized. Call initialize() first.');
     }
 
     const startTime = performance.now();
@@ -527,62 +541,42 @@ export class EqualAccessAdapter implements IA11yEngine {
 
   /** Get rule title from engine metadata */
   private getRuleTitle(issue: EqualAccessIssue, nls?: EqualAccessReport['nls']): string {
-    console.log('[EqualAccess getRuleTitle] Processing issue:', {
-      ruleId: issue.ruleId,
-      reasonId: issue.reasonId,
-      message: issue.message,
-      hasChecker: !!this.checker,
-      hasEngine: !!(this.checker && this.checker.engine),
-      hasNLS: !!nls
-    });
-
     // Try to get the specific message for this reasonId from the engine's rule metadata
     if (this.checker && this.checker.engine) {
       try {
         const rule = this.checker.engine.getRule(issue.ruleId);
-        console.log('[EqualAccess getRuleTitle] Rule from engine:', rule);
         
         if (rule && rule.messages && rule.messages['en-US']) {
-          console.log('[EqualAccess getRuleTitle] Available messages:', Object.keys(rule.messages['en-US']));
-          
           // Try specific reasonId message first
           if (issue.reasonId) {
             const specificMessage = rule.messages['en-US'][issue.reasonId];
-            console.log('[EqualAccess getRuleTitle] Specific message for', issue.reasonId, ':', specificMessage);
             if (specificMessage && specificMessage !== 'Rule Passed') {
-              console.log('[EqualAccess getRuleTitle] ✓ Using specific message');
               return specificMessage;
             }
           }
           // Fall back to group message if reasonId message not found
           if (rule.messages['en-US'].group) {
-            console.log('[EqualAccess getRuleTitle] ✓ Using group message:', rule.messages['en-US'].group);
             return rule.messages['en-US'].group;
           }
         }
       } catch (error) {
-        console.warn('[EqualAccess getRuleTitle] Error getting rule from engine:', error);
+        // Silently handle errors
       }
     }
 
     // Try to get from NLS data in the report
     if (nls && issue.ruleId in nls) {
-      console.log('[EqualAccess getRuleTitle] NLS data for rule:', nls[issue.ruleId]);
-      
       // Try specific reasonId message first
       if (issue.reasonId && issue.reasonId in nls[issue.ruleId]) {
-        console.log('[EqualAccess getRuleTitle] ✓ Using NLS specific message');
         return nls[issue.ruleId][issue.reasonId];
       }
       // Fall back to group message
       if ('group' in nls[issue.ruleId]) {
-        console.log('[EqualAccess getRuleTitle] ✓ Using NLS group message');
         return nls[issue.ruleId].group;
       }
     }
 
     // Fall back to issue message or rule ID
-    console.log('[EqualAccess getRuleTitle] ✗ Falling back to:', issue.message || issue.ruleId);
     return issue.message || issue.ruleId;
   }
 
