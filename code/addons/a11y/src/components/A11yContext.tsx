@@ -24,7 +24,7 @@ import {
 import type { Report } from 'storybook/preview-api';
 import { convert, themes } from 'storybook/theming';
 
-import { ensureRuleCacheInitialized, updateRuleCache } from '../ruleCache';
+import { updateRuleCache } from '../ruleCache';
 import { getFriendlySummaryForAxeResult, getTitleForAxeResult } from '../ruleHelpers';
 import { ADDON_ID, EVENTS, STATUS_TYPE_ID_A11Y, STATUS_TYPE_ID_COMPONENT_TEST } from '../constants';
 import type { A11yRuleMetadata } from '../rules/types';
@@ -89,13 +89,6 @@ export const A11yContext = createContext<A11yContextStore>({
 });
 
 export const A11yContextProvider: FC<PropsWithChildren> = (props) => {
-  // Initialize rule cache once on mount
-  const cacheInitialized = useRef(false);
-  if (!cacheInitialized.current) {
-    ensureRuleCacheInitialized();
-    cacheInitialized.current = true;
-  }
-
   const parameters = useParameter<A11yParameters>('a11y', {});
 
   const [globals] = useGlobals() ?? [];

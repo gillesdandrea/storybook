@@ -21,10 +21,16 @@ const DEFAULT_PARAMETERS: A11yParameters = {
   options: {},
 };
 
-const DISABLED_RULES = [
+const DISABLED_RULES_AXE_CORE = [
   // In component testing, landmarks are not always present
   // and the rule check can cause false positives
   'region',
+] as const;
+
+const DISABLED_RULES_EQUAL_ACCESS = [
+  // In component testing, landmarks are not always present
+  // and the rule check can cause false positives
+  'aria_content_in_landmark',
 ] as const;
 
 // A simple queue to run axe-core in sequence
@@ -123,13 +129,13 @@ export const run = async (
   // Prepare configuration
   const config: A11yEngineConfig = input.config || {};
 
-  // Handle legacy axe-core configuration for backward compatibility
+  // Add default disabled rules based on engine type
   if (engineType === 'axe-core') {
     // Add default disabled rules for axe-core
     if (!config.rules) {
       config.rules = {};
     }
-    for (const ruleId of DISABLED_RULES) {
+    for (const ruleId of DISABLED_RULES_AXE_CORE) {
       if (!(ruleId in config.rules)) {
         config.rules[ruleId] = { enabled: false };
       }
@@ -156,6 +162,16 @@ export const run = async (
             };
           }
         }
+      }
+    }
+  } else if (engineType === 'equal-access') {
+    // Add default disabled rules for equal-access
+    if (!config.rules) {
+      config.rules = {};
+    }
+    for (const ruleId of DISABLED_RULES_EQUAL_ACCESS) {
+      if (!(ruleId in config.rules)) {
+        config.rules[ruleId] = { enabled: false };
       }
     }
   }
