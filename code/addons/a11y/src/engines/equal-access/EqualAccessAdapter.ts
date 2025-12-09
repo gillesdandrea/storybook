@@ -398,6 +398,8 @@ export class EqualAccessAdapter implements IA11yEngine {
         reasonId: issue.reasonId,
         category: issue.category,
         equalAccessIssue: issue,
+        // Store severity as impact for backward compatibility with Report component
+        impact: this.mapSeverityToImpact(this.mapSeverity(policy, confidence)),
       },
     };
   }
@@ -487,15 +489,23 @@ export class EqualAccessAdapter implements IA11yEngine {
 
   /** Map IBM Equal Access policy/confidence to normalized severity */
   private mapSeverity(policy: EqualAccessPolicy, confidence: EqualAccessConfidence): A11ySeverity {
+    // PASS results are always informational
     if (confidence === EqualAccessConfidence.PASS) {
       return A11ySeverity.INFORMATION;
     }
 
+    // POTENTIAL and MANUAL confidence levels should be treated as "Need Review" (WARNING)
+    // regardless of policy, since they require manual verification
+    if (confidence === EqualAccessConfidence.POTENTIAL || confidence === EqualAccessConfidence.MANUAL) {
+      return A11ySeverity.WARNING;
+    }
+
+    // For FAIL confidence, use the policy to determine severity
     switch (policy) {
       case EqualAccessPolicy.VIOLATION:
         return A11ySeverity.VIOLATION;
       case EqualAccessPolicy.RECOMMENDATION:
-        return A11ySeverity.WARNING;
+        return A11ySeverity.RECOMMENDATION;
       case EqualAccessPolicy.INFORMATION:
         return A11ySeverity.INFORMATION;
       default:
@@ -516,6 +526,24 @@ export class EqualAccessAdapter implements IA11yEngine {
         return A11yConfidence.MANUAL;
       default:
         return A11yConfidence.POTENTIAL;
+    }
+  }
+
+  /** Map normalized severity to custom impact values for equal-access display */
+  private mapSeverityToImpact(severity: A11ySeverity): string {
+    // Use custom impact values that will be recognized by the Report component
+    // These map directly to the severity labels we want to display
+    switch (severity) {
+      case A11ySeverity.VIOLATION:
+        return 'violation';
+      case A11ySeverity.WARNING:
+        return 'needsReview';
+      case A11ySeverity.RECOMMENDATION:
+        return 'recommendation';
+      case A11ySeverity.INFORMATION:
+        return 'information';
+      default:
+        return 'information';
     }
   }
 

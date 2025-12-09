@@ -26,6 +26,21 @@ const impactLabels: Record<NonNullable<ImpactValue>, string> = {
   critical: 'Critical',
 };
 
+// Extended impact mapping for equal-access engine custom values
+const equalAccessImpactStatus: Record<string, ComponentProps<typeof Badge>['status']> = {
+  violation: 'critical',
+  needsReview: 'warning',
+  recommendation: 'neutral',
+  information: 'neutral',
+};
+
+const equalAccessImpactLabels: Record<string, string> = {
+  violation: 'Violation',
+  needsReview: 'Need Review',
+  recommendation: 'Recommendation',
+  information: 'Information',
+};
+
 const Wrapper = styled.div(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
@@ -115,11 +130,28 @@ export const Report: FC<ReportProps> = ({
                 <strong>{title}</strong>
                 <RuleId>{item.id}</RuleId>
               </Title>
-              {item.impact && (
-                <Badge status={type === RuleType.PASS ? 'neutral' : impactStatus[item.impact]}>
-                  {impactLabels[item.impact]}
-                </Badge>
-              )}
+              {(() => {
+                const impact = item.impact as string | undefined;
+                if (!impact) return null;
+                
+                // Check if this is an equal-access custom impact value
+                if (impact in equalAccessImpactLabels) {
+                  return (
+                    <Badge status={type === RuleType.PASS ? 'neutral' : equalAccessImpactStatus[impact]}>
+                      {equalAccessImpactLabels[impact]}
+                    </Badge>
+                  );
+                }
+                // Otherwise use standard axe-core impact labels
+                if (impact in impactLabels) {
+                  return (
+                    <Badge status={type === RuleType.PASS ? 'neutral' : impactStatus[impact as NonNullable<ImpactValue>]}>
+                      {impactLabels[impact as NonNullable<ImpactValue>]}
+                    </Badge>
+                  );
+                }
+                return null;
+              })()}
               <Count>{item.nodes.length}</Count>
               <Button
                 onClick={(event) => toggleOpen(event, type, item)}

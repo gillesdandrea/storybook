@@ -435,7 +435,7 @@ export default definePreview({
         policies: ['IBM_Accessibility'],
         // Other available policies: 'WCAG_2_1', 'WCAG_2_0'
         rules: [
-          { id: 'skip_main_exists', enabled: false }
+          { id: 'aria_content_in_landmark', enabled: true }
         ]
       },
     },
