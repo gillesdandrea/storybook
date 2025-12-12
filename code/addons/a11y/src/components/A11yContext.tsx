@@ -25,12 +25,14 @@ import type { Report } from 'storybook/preview-api';
 import { convert, themes } from 'storybook/theming';
 
 import { updateRuleCache } from '../ruleCache';
-import { getFriendlySummaryForAxeResult, getTitleForAxeResult } from '../ruleHelpers';
 import { ADDON_ID, EVENTS, STATUS_TYPE_ID_A11Y, STATUS_TYPE_ID_COMPONENT_TEST } from '../constants';
 import type { A11yRuleMetadata } from '../rules/types';
 import type { A11yParameters } from '../params';
-import type { A11YReport, EnhancedResult, EnhancedResults, Status } from '../types';
+import type { A11YReport, Status } from '../types';
 import { RuleType } from '../types';
+import type { A11yReport as NormalizedA11yReport } from '../engines/types';
+import { ReportEnrichmentService } from '../display/ReportEnrichmentService';
+import type { EnrichedReport, EnrichedIssue } from '../display/types';
 import type { TestDiscrepancy } from './TestDiscrepancyMessage';
 
 // These elements should not be highlighted because they usually cover the whole page.
@@ -39,7 +41,7 @@ const unhighlightedSelectors = ['html', 'body', 'main'];
 
 export interface A11yContextStore {
   parameters: A11yParameters;
-  results: EnhancedResults | undefined;
+  results: EnrichedReport | undefined;
   highlighted: boolean;
   toggleHighlight: () => void;
   tab: RuleType;
@@ -51,7 +53,7 @@ export interface A11yContextStore {
   handleManual: () => void;
   discrepancy: TestDiscrepancy;
   selectedItems: Map<string, string>;
-  toggleOpen: (event: React.SyntheticEvent<Element>, type: RuleType, item: EnhancedResult) => void;
+  toggleOpen: (event: React.SyntheticEvent<Element>, type: RuleType, item: EnrichedIssue) => void;
   allExpanded: boolean;
   handleCollapseAll: () => void;
   handleExpandAll: () => void;
@@ -108,7 +110,7 @@ export const A11yContextProvider: FC<PropsWithChildren> = (props) => {
 
   const [state, setState] = useAddonState<{
     ui: { highlighted: boolean; tab: RuleType };
-    results: EnhancedResults | undefined;
+    results: EnrichedReport | undefined;
     error: unknown;
     status: Status;
   }>(ADDON_ID, {
@@ -165,13 +167,13 @@ export const A11yContextProvider: FC<PropsWithChildren> = (props) => {
   // All items are expanded if something is selected from each result for the current tab
   const allExpanded = useMemo(() => {
     const currentResults = results?.[ui.tab];
-    return currentResults?.every((result) => selectedItems.has(`${ui.tab}.${result.id}`)) ?? false;
+    return currentResults?.every((result) => selectedItems.has(`${ui.tab}.${result.ruleId}`)) ?? false;
   }, [results, selectedItems, ui.tab]);
 
   const toggleOpen = useCallback(
-    (event: React.SyntheticEvent<Element>, type: RuleType, item: EnhancedResult) => {
+    (event: React.SyntheticEvent<Element>, type: RuleType, item: EnrichedIssue) => {
       event.stopPropagation();
-      const key = `${type}.${item.id}`;
+      const key = `${type}.${item.ruleId}`;
       setSelectedItems((prev) => new Map(prev.delete(key) ? prev : prev.set(key, `${key}.1`)));
     },
     []
@@ -186,7 +188,7 @@ export const A11yContextProvider: FC<PropsWithChildren> = (props) => {
       (prev) =>
         new Map(
           results?.[ui.tab]?.map((result) => {
-            const key = `${ui.tab}.${result.id}`;
+            const key = `${ui.tab}.${result.ruleId}`;
             return [key, prev.get(key) ?? `${key}.1`];
           }) ?? []
         )
@@ -206,9 +208,11 @@ export const A11yContextProvider: FC<PropsWithChildren> = (props) => {
   );
 
   const handleResult = useCallback(
-    (axeResults: EnhancedResults, id: string) => {
+    (report: NormalizedA11yReport, id: string) => {
       if (storyId === id) {
-        setState((prev) => ({ ...prev, status: 'ran', results: axeResults }));
+        // Enrich the normalized report before storing
+        const enrichedReport = ReportEnrichmentService.enrich(report);
+        setState((prev) => ({ ...prev, status: 'ran', results: enrichedReport }));
 
         setTimeout(() => {
           setState((prev) => {
@@ -233,15 +237,14 @@ export const A11yContextProvider: FC<PropsWithChildren> = (props) => {
   const handleSelect = useCallback(
     (itemId: string, details: ClickEventDetails) => {
       const [type, id] = itemId.split('.');
-      const { helpUrl, nodes } = results?.[type as RuleType]?.find((r) => r.id === id) || {};
+      const issue = results?.[type as RuleType]?.find((r) => r.ruleId === id);
+      if (!issue) return;
+      
+      const { helpUrl, nodes } = issue;
       const openedWindow = helpUrl && window.open(helpUrl, '_blank', 'noopener,noreferrer');
       if (nodes && !openedWindow) {
         const index = nodes.findIndex((n) =>
-          details.selectors.some((selector) =>
-            Array.isArray(n.target)
-              ? n.target.includes(selector)
-              : n.target === selector
-          )
+          details.selectors.some((selector) => n.selector === selector)
         ) ?? -1;
         if (index !== -1) {
           const key = `${type}.${id}.${index + 1}`;
@@ -384,9 +387,9 @@ export const A11yContextProvider: FC<PropsWithChildren> = (props) => {
       if (type !== ui.tab) {
         return [];
       }
-      const result = results?.[type as RuleType]?.find((r) => r.id === id);
-      const target = result?.nodes[Number(number) - 1]?.target;
-      return target ? [String(target)] : [];
+      const result = results?.[type as RuleType]?.find((r) => r.ruleId === id);
+      const selector = result?.nodes[Number(number) - 1]?.selector;
+      return selector ? [selector] : [];
     });
     if (selected.length) {
       emit(HIGHLIGHT, {
@@ -405,18 +408,17 @@ export const A11yContextProvider: FC<PropsWithChildren> = (props) => {
         },
         menu: results?.[ui.tab as RuleType].map<HighlightMenuItem[]>((result) => {
           const selectors = result.nodes
-            .flatMap((n) => n.target)
-            .map(String)
+            .map((n) => n.selector)
             .filter((e) => selected.includes(e));
           return [
             {
-              id: `${ui.tab}.${result.id}:info`,
-              title: getTitleForAxeResult(result),
-              description: getFriendlySummaryForAxeResult(result),
+              id: `${ui.tab}.${result.ruleId}:info`,
+              title: result.displayTitle,
+              description: result.displayDescription,
               selectors,
             },
             {
-              id: `${ui.tab}.${result.id}`,
+              id: `${ui.tab}.${result.ruleId}`,
               iconLeft: 'info',
               iconRight: 'shareAlt',
               title: 'Learn how to resolve this violation',
@@ -429,7 +431,7 @@ export const A11yContextProvider: FC<PropsWithChildren> = (props) => {
     }
 
     const others = results?.[ui.tab as RuleType]
-      .flatMap((r) => r.nodes.flatMap((n) => n.target).map(String))
+      .flatMap((r) => r.nodes.map((n) => n.selector))
       .filter((e) => ![...unhighlightedSelectors, ...selected].includes(e));
     if (others?.length) {
       emit(HIGHLIGHT, {
@@ -447,18 +449,17 @@ export const A11yContextProvider: FC<PropsWithChildren> = (props) => {
         },
         menu: results?.[ui.tab as RuleType].map<HighlightMenuItem[]>((result) => {
           const selectors = result.nodes
-            .flatMap((n) => n.target)
-            .map(String)
+            .map((n) => n.selector)
             .filter((e) => !selected.includes(e));
           return [
             {
-              id: `${ui.tab}.${result.id}:info`,
-              title: getTitleForAxeResult(result),
-              description: getFriendlySummaryForAxeResult(result),
+              id: `${ui.tab}.${result.ruleId}:info`,
+              title: result.displayTitle,
+              description: result.displayDescription,
               selectors,
             },
             {
-              id: `${ui.tab}.${result.id}`,
+              id: `${ui.tab}.${result.ruleId}`,
               iconLeft: 'info',
               iconRight: 'shareAlt',
               title: 'Learn how to resolve this violation',
