@@ -1,6 +1,11 @@
 # Storybook Accessibility Addon
 
-The @storybook/addon-a11y package provides accessibility testing for Storybook stories. It uses axe-core to run the tests.
+The @storybook/addon-a11y package provides accessibility testing for Storybook stories. It supports two accessibility testing engines:
+
+- **axe-core** (default): Industry-standard accessibility testing engine
+- **IBM Equal Access**: IBM's comprehensive accessibility checker
+
+You can configure which engine to use based on your project's requirements.
 
 ## Getting Started
 

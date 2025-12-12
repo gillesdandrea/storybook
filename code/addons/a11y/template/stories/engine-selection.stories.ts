@@ -32,4 +32,3 @@ export const EqualAccessEngine = {
   },
 };
 
-// Made with Bob
