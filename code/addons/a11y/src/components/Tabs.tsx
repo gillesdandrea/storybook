@@ -4,10 +4,10 @@ import { Button, TabsView } from 'storybook/internal/components';
 
 import { CollapseIcon, ExpandAltIcon, EyeCloseIcon, EyeIcon, SyncIcon } from '@storybook/icons';
 
-import type { Result } from 'axe-core';
 import { styled, useTheme } from 'storybook/theming';
 
 import type { RuleType } from '../types';
+import type { EnrichedIssue } from '../display/types';
 import { useA11yContext } from './A11yContext';
 
 const Container = styled.div({
@@ -48,7 +48,7 @@ interface TabsProps {
   tabs: {
     label: React.ReactElement;
     panel: React.ReactElement;
-    items: Result[];
+    items: EnrichedIssue[];
     type: RuleType;
   }[];
 }
@@ -83,11 +83,11 @@ export const Tabs: React.FC<TabsProps> = ({ tabs }) => {
         onSelectionChange={(key) => setTab(key as RuleType)}
         tools={
           <ActionsWrapper>
-            {results?.testEngine && (
+            {results?.engine && (
               <EngineInfo>
-                <EngineName>{results.testEngine.name}</EngineName>
-                {results.testEngine.version && (
-                  <span>v{results.testEngine.version}</span>
+                <EngineName>{results.engine}</EngineName>
+                {results.metadata?.engineVersion && (
+                  <span>v{results.metadata.engineVersion}</span>
                 )}
               </EngineInfo>
             )}

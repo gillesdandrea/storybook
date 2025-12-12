@@ -201,5 +201,3 @@ describe('a11yRunner - reportLevels parameter mapping', () => {
     expect(config.engineOptions?.reportLevels).toEqual(['violation', 'recommendation']);
   });
 });
-
-// Made with Bob

@@ -1,8 +1,9 @@
 import type { AxeResults, NodeResult, Result } from 'axe-core';
 
 import type { A11yParameters as A11yParams } from './params';
+import type { A11yReport as NormalizedA11yReport } from './engines/types';
 
-export type A11YReport = EnhancedResults | { error: Error };
+export type A11YReport = NormalizedA11yReport | { error: Error };
 
 export interface A11yParameters {
   /**

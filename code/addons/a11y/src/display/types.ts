@@ -108,6 +108,8 @@ export interface EnrichedIssue {
  * Display-optimized report
  */
 export interface EnrichedReport {
+  /** Engine that generated this report */
+  engine: A11yEngineType;
   violations: EnrichedIssue[];
   warnings: EnrichedIssue[];
   passes: EnrichedIssue[];
@@ -125,5 +127,3 @@ export interface EnrichedReport {
     engineVersion?: string;
   };
 }
-
-// Made with Bob

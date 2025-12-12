@@ -7,9 +7,10 @@ import React from 'react';
 import * as managerApi from 'storybook/manager-api';
 import { ThemeProvider, convert, themes } from 'storybook/theming';
 
-import { type EnhancedResults } from '../types';
 import { A11YPanel } from './A11YPanel';
 import { type A11yContextStore, useA11yContext } from './A11yContext';
+import type { EnrichedReport } from '../display/types';
+import { A11yEngineType } from '../engines/types';
 
 vi.mock('storybook/manager-api');
 const mockedManagerApi = vi.mocked(managerApi);
@@ -21,24 +22,30 @@ mockedManagerApi.useParameter.mockReturnValue({
   manual: false,
 } as any);
 
-const emptyResults: EnhancedResults = {
+const emptyResults: EnrichedReport = {
+  engine: A11yEngineType.AXE_CORE,
   passes: [],
   incomplete: [],
   violations: [],
-  toolOptions: {},
-  inapplicable: [],
-  testEngine: { name: '', version: '' },
-  testRunner: { name: '' },
-  testEnvironment: { userAgent: '', windowWidth: 0, windowHeight: 0 },
-  url: '',
-  timestamp: '',
+  warnings: [],
+  summary: {
+    totalIssues: 0,
+    violationCount: 0,
+    warningCount: 0,
+    passCount: 0,
+    incompleteCount: 0,
+  },
+  metadata: {
+    executionTime: 0,
+    rulesExecuted: 0,
+  },
 };
 
 describe('A11YPanel', () => {
   it('should render initializing state', () => {
     mockedUseA11yContext.mockReturnValue({
       parameters: {},
-      results: emptyResults,
+      results: undefined,
       status: 'initial',
       handleManual: vi.fn(),
       error: null,
@@ -57,7 +64,7 @@ describe('A11YPanel', () => {
     const handleManual = vi.fn();
     mockedUseA11yContext.mockReturnValue({
       parameters: {},
-      results: emptyResults,
+      results: undefined,
       status: 'manual',
       handleManual,
       error: null,
@@ -79,7 +86,7 @@ describe('A11YPanel', () => {
   it('should render running state', () => {
     mockedUseA11yContext.mockReturnValue({
       parameters: {},
-      results: emptyResults,
+      results: undefined,
       status: 'running',
       handleManual: vi.fn(),
       error: null,
@@ -99,7 +106,7 @@ describe('A11YPanel', () => {
   it('should render error state', () => {
     mockedUseA11yContext.mockReturnValue({
       parameters: {},
-      results: emptyResults,
+      results: undefined,
       status: 'error',
       handleManual: vi.fn(),
       error: 'Test error message',
@@ -118,7 +125,7 @@ describe('A11YPanel', () => {
   it('should render error state with object error', () => {
     mockedUseA11yContext.mockReturnValue({
       parameters: {},
-      results: emptyResults,
+      results: undefined,
       status: 'error',
       handleManual: vi.fn(),
       error: { message: 'Test error object message' },

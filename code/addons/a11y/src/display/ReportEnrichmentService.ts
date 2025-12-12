@@ -24,6 +24,7 @@ export class ReportEnrichmentService {
    */
   static enrich(report: A11yReport): EnrichedReport {
     return {
+      engine: report.engine,
       violations: report.violations.map((issue) => this.enrichIssue(issue, report)),
       warnings: report.warnings.map((issue) => this.enrichIssue(issue, report)),
       passes: report.passes.map((issue) => this.enrichIssue(issue, report)),
@@ -254,5 +255,3 @@ export class ReportEnrichmentService {
     return groups;
   }
 }
-
-// Made with Bob

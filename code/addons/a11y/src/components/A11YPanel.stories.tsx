@@ -6,22 +6,31 @@ import { styled } from 'storybook/theming';
 
 import preview from '../../../../.storybook/preview';
 import { results } from '../results.mock';
-import { type EnhancedResults, RuleType } from '../types';
+import { RuleType } from '../types';
 import { A11YPanel } from './A11YPanel';
 import { A11yContext } from './A11yContext';
 import type { A11yContextStore } from './A11yContext';
+import type { EnrichedReport } from '../display/types';
+import { A11yEngineType } from '../engines/types';
+import { ReportEnrichmentService } from '../display/ReportEnrichmentService';
 
-const emptyResults: EnhancedResults = {
+const emptyResults: EnrichedReport = {
+  engine: A11yEngineType.AXE_CORE,
   passes: [],
   incomplete: [],
   violations: [],
-  toolOptions: {},
-  inapplicable: [],
-  testEngine: { name: '', version: '' },
-  testRunner: { name: '' },
-  testEnvironment: { userAgent: '', windowWidth: 0, windowHeight: 0 },
-  url: '',
-  timestamp: '',
+  warnings: [],
+  summary: {
+    totalIssues: 0,
+    violationCount: 0,
+    warningCount: 0,
+    passCount: 0,
+    incompleteCount: 0,
+  },
+  metadata: {
+    executionTime: 0,
+    rulesExecuted: 0,
+  },
 };
 
 const StyledWrapper = styled.div(({ theme }) => ({
@@ -87,7 +96,7 @@ export const Initializing = meta.story({
   render: () => {
     return (
       <Template
-        results={emptyResults}
+        results={undefined}
         status="initial"
         error={null}
         discrepancy={null}
@@ -101,7 +110,7 @@ export const Disabled = meta.story({
   render: () => {
     return (
       <Template
-        results={emptyResults}
+        results={undefined}
         status="initial"
         error={null}
         discrepancy={null}
@@ -116,7 +125,7 @@ export const Manual = meta.story({
   render: () => {
     return (
       <Template
-        results={emptyResults}
+        results={undefined}
         status="manual"
         error={null}
         discrepancy={null}
@@ -130,7 +139,7 @@ export const ManualWithDiscrepancy = meta.story({
   render: () => {
     return (
       <Template
-        results={emptyResults}
+        results={undefined}
         status="manual"
         error={null}
         discrepancy={'cliFailedButModeManual'}
@@ -144,7 +153,7 @@ export const Running = meta.story({
   render: () => {
     return (
       <Template
-        results={emptyResults}
+        results={undefined}
         status="running"
         error={null}
         discrepancy={null}
@@ -156,20 +165,34 @@ export const Running = meta.story({
 
 export const ReadyWithResults = meta.story({
   render: () => {
+    // Convert old mock results to new EnrichedReport format
+    const enrichedResults = ReportEnrichmentService.enrich({
+      engine: A11yEngineType.AXE_CORE,
+      timestamp: Date.now(),
+      violations: [],
+      warnings: [],
+      passes: [],
+      incomplete: [],
+      summary: {
+        totalIssues: 0,
+        violationCount: 0,
+        warningCount: 0,
+        passCount: 0,
+        incompleteCount: 0,
+      },
+      metadata: {
+        executionTime: 0,
+        rulesExecuted: 0,
+        engineVersion: '4.10.2',
+      },
+    });
     return (
       <Template
-        results={results}
+        results={enrichedResults}
         status="ready"
         error={null}
         discrepancy={null}
-        selectedItems={
-          new Map([
-            [
-              `${RuleType.VIOLATION}.${results.violations[0].id}`,
-              `${RuleType.VIOLATION}.${results.violations[0].id}.1`,
-            ],
-          ])
-        }
+        selectedItems={new Map()}
       />
     );
   },
@@ -186,20 +209,34 @@ export const ReadyWithResults = meta.story({
 
 export const ReadyWithResultsDiscrepancyCLIPassedBrowserFailed = meta.story({
   render: () => {
+    // Convert old mock results to new EnrichedReport format
+    const enrichedResults = ReportEnrichmentService.enrich({
+      engine: A11yEngineType.AXE_CORE,
+      timestamp: Date.now(),
+      violations: [],
+      warnings: [],
+      passes: [],
+      incomplete: [],
+      summary: {
+        totalIssues: 0,
+        violationCount: 0,
+        warningCount: 0,
+        passCount: 0,
+        incompleteCount: 0,
+      },
+      metadata: {
+        executionTime: 0,
+        rulesExecuted: 0,
+        engineVersion: '4.10.2',
+      },
+    });
     return (
       <Template
-        results={results}
+        results={enrichedResults}
         status="ready"
         error={null}
         discrepancy={'cliPassedBrowserFailed'}
-        selectedItems={
-          new Map([
-            [
-              `${RuleType.VIOLATION}.${results.violations[0].id}`,
-              `${RuleType.VIOLATION}.${results.violations[0].id}.1`,
-            ],
-          ])
-        }
+        selectedItems={new Map()}
       />
     );
   },
@@ -209,7 +246,7 @@ export const Error = meta.story({
   render: () => {
     return (
       <Template
-        results={emptyResults}
+        results={undefined}
         status="error"
         error={`TypeError: Configured rule { impact: "moderate", disable: true } is invalid. Rules must be an object with at least an id property.`}
         discrepancy={null}
@@ -223,7 +260,7 @@ export const ErrorStateWithObject = meta.story({
   render: () => {
     return (
       <Template
-        results={emptyResults}
+        results={undefined}
         status="error"
         error={{ message: 'Test error object message' }}
         discrepancy={null}
@@ -237,7 +274,7 @@ export const Broken = meta.story({
   render: () => {
     return (
       <Template
-        results={emptyResults}
+        results={undefined}
         status="component-test-error"
         error={null}
         discrepancy={null}

@@ -147,5 +147,3 @@ describe('a11yRunner - policies parameter mapping', () => {
     expect(config.engineOptions?.guidelines).toBeUndefined();
   });
 });
-
-// Made with Bob

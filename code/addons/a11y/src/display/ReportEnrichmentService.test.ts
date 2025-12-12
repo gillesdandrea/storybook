@@ -547,5 +547,3 @@ function createMockIssue(overrides: Partial<A11yIssue> = {}): A11yIssue {
     ...overrides,
   };
 }
-
-// Made with Bob
