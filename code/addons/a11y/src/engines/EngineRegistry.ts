@@ -1,5 +1,6 @@
 /** Storybook A11y Addon - Engine Registry with Lazy Loading */
-import type { A11yEngineType, EngineFactory, IA11yEngine } from './types';
+import { A11yEngineType } from './types';
+import type { EngineFactory, IA11yEngine } from './types';
 
 /**
  * Singleton registry for managing accessibility engines with lazy loading
@@ -34,13 +35,13 @@ export class EngineRegistry {
     }
 
     // Register axe-core factory with dynamic import
-    this.registerFactory('axe-core', async () => {
+    this.registerFactory(A11yEngineType.AXE_CORE, async () => {
       const { AxeCoreAdapter } = await import('./axe-core/AxeCoreAdapter');
       return new AxeCoreAdapter();
     });
 
     // Register equal-access factory with dynamic import
-    this.registerFactory('equal-access', async () => {
+    this.registerFactory(A11yEngineType.EQUAL_ACCESS, async () => {
       const { EqualAccessAdapter } = await import('./equal-access/EqualAccessAdapter');
       return new EqualAccessAdapter();
     });

@@ -420,23 +420,28 @@ export default definePreview({
       // Axe-core configuration (commented out for easy switching)
       // engine: 'axe-core',
       // config: {
-      //   rules: [
-      //     {
-      //       id: 'color-contrast',
-      //       enabled: true,
-      //     },
-      //     { id: 'landmark-one-main', enabled: true }
-      //   ],
+      //   rules: {
+      //     'color-contrast': { enabled: true },
+      //     'landmark-one-main': { enabled: true }
+      //   },
       // },
       
       // IBM Equal Access configuration
       engine: 'equal-access',
       config: {
+        // Specify accessibility policies/guidelines to test against
         policies: ['IBM_Accessibility'],
         // Other available policies: 'WCAG_2_1', 'WCAG_2_0'
-        rules: [
-          { id: 'aria_content_in_landmark', enabled: true }
-        ]
+        // You can also use multiple: policies: ['IBM_Accessibility', 'WCAG_2_1']
+        
+        // Filter results by report level (optional)
+        // Default: ['violation', 'potentialviolation']
+        // Available: 'violation', 'potentialviolation', 'recommendation', 'potentialrecommendation', 'manual'
+        reportLevels: ['violation', 'potentialviolation'],
+        
+        rules: {
+          'aria_content_in_landmark': { enabled: true }
+        }
       },
     },
   },

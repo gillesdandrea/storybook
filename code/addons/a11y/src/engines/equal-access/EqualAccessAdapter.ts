@@ -182,13 +182,16 @@ export class EqualAccessAdapter implements IA11yEngine {
       // Prepare guideline IDs (rulesets)
       const guidelineIds = this.prepareGuidelineIds(config);
 
+      // Get report levels for filtering
+      const reportLevels = this.prepareReportLevels(config);
+
       // Run the check (don't configure rules before check as it affects the checker globally)
       const report = await this.checker.check(root, guidelineIds);
 
       const executionTime = performance.now() - startTime;
 
-      // Convert to normalized format and filter results based on rule configuration
-      return this.convertResults(report, executionTime, config.rules);
+      // Convert to normalized format and filter results based on rule configuration and report levels
+      return this.convertResults(report, executionTime, config.rules, reportLevels);
     } catch (error) {
       throw new Error(
         `IBM Equal Access execution failed: ${
@@ -272,15 +275,37 @@ export class EqualAccessAdapter implements IA11yEngine {
     return ['IBM_Accessibility'];
   }
 
+  /** Prepare report levels from config */
+  private prepareReportLevels(config: A11yEngineConfig): string[] {
+    // Check if engine-specific options specify reportLevels
+    if (config.engineOptions?.reportLevels && Array.isArray(config.engineOptions.reportLevels)) {
+      return config.engineOptions.reportLevels as string[];
+    }
+
+    // Default to violation and potentialviolation
+    return ['violation', 'potentialviolation'];
+  }
+
 
   /** Convert IBM Equal Access results to normalized format */
   private convertResults(
     report: EqualAccessReport,
     executionTime: number,
-    rulesConfig?: { [ruleId: string]: { enabled: boolean; options?: Record<string, unknown> } }
+    rulesConfig?: { [ruleId: string]: { enabled: boolean; options?: Record<string, unknown> } },
+    reportLevels?: string[]
   ): A11yReport {
-    // First, convert all issues to determine their category
-    let allIssues = report.results.map((issue: EqualAccessIssue) => this.convertIssue(issue, report.nls));
+    // First, filter by report levels if specified
+    let filteredResults = report.results;
+    if (reportLevels && reportLevels.length > 0) {
+      filteredResults = report.results.filter((issue: EqualAccessIssue) => {
+        const [policy, confidence] = issue.value;
+        const reportLevel = this.getReportLevel(policy, confidence);
+        return reportLevels.includes(reportLevel);
+      });
+    }
+
+    // Convert all filtered issues to determine their category
+    let allIssues = filteredResults.map((issue: EqualAccessIssue) => this.convertIssue(issue, report.nls));
     
     // Filter out issues for rules that are explicitly disabled
     if (rulesConfig) {
@@ -527,6 +552,38 @@ export class EqualAccessAdapter implements IA11yEngine {
       default:
         return A11yConfidence.POTENTIAL;
     }
+  }
+
+  /** Get report level from policy and confidence for filtering */
+  private getReportLevel(policy: EqualAccessPolicy, confidence: EqualAccessConfidence): string {
+    // Map IBM Equal Access policy/confidence combinations to report levels
+    // Report levels: violation, potentialviolation, recommendation, potentialrecommendation, manual
+    
+    if (confidence === EqualAccessConfidence.MANUAL) {
+      return 'manual';
+    }
+    
+    if (confidence === EqualAccessConfidence.POTENTIAL) {
+      if (policy === EqualAccessPolicy.VIOLATION) {
+        return 'potentialviolation';
+      } else if (policy === EqualAccessPolicy.RECOMMENDATION) {
+        return 'potentialrecommendation';
+      }
+      // For INFORMATION policy with POTENTIAL confidence, treat as potentialrecommendation
+      return 'potentialrecommendation';
+    }
+    
+    // For FAIL confidence
+    if (confidence === EqualAccessConfidence.FAIL) {
+      if (policy === EqualAccessPolicy.VIOLATION) {
+        return 'violation';
+      } else if (policy === EqualAccessPolicy.RECOMMENDATION) {
+        return 'recommendation';
+      }
+    }
+    
+    // Default to recommendation for other cases
+    return 'recommendation';
   }
 
   /** Map normalized severity to custom impact values for equal-access display */

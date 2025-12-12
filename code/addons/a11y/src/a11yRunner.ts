@@ -174,6 +174,36 @@ export const run = async (
         config.rules[ruleId] = { enabled: false };
       }
     }
+
+    // Normalize 'policies' parameter to 'engineOptions.guidelines'
+    // This provides a user-friendly alias for the Equal Access guideline configuration
+    if (input.config && 'policies' in input.config) {
+      const policies = (input.config as any).policies;
+      if (policies) {
+        if (!config.engineOptions) {
+          config.engineOptions = {};
+        }
+        // Only set guidelines if not already explicitly set
+        if (!config.engineOptions.guidelines) {
+          config.engineOptions.guidelines = Array.isArray(policies) ? policies : [policies];
+        }
+      }
+    }
+
+    // Normalize 'reportLevels' parameter to 'engineOptions.reportLevels'
+    // This provides filtering of results by report level
+    if (input.config && 'reportLevels' in input.config) {
+      const reportLevels = (input.config as any).reportLevels;
+      if (reportLevels && Array.isArray(reportLevels)) {
+        if (!config.engineOptions) {
+          config.engineOptions = {};
+        }
+        // Only set reportLevels if not already explicitly set
+        if (!config.engineOptions.reportLevels) {
+          config.engineOptions.reportLevels = reportLevels;
+        }
+      }
+    }
   }
 
   // Handle array-based rules configuration for all engines

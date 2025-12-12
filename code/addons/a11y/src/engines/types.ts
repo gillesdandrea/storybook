@@ -116,6 +116,21 @@ export interface A11yEngineConfig {
     };
   };
 
+  /**
+   * IBM Equal Access: Accessibility policies/guidelines to test against
+   * This is a user-friendly alias for engineOptions.guidelines
+   * @example ['IBM_Accessibility', 'WCAG_2_1', 'WCAG_2_0']
+   */
+  policies?: string | string[];
+
+  /**
+   * IBM Equal Access: Report levels to include in results
+   * Valid values: 'violation', 'potentialviolation', 'recommendation', 'potentialrecommendation', 'manual'
+   * Default: ['violation', 'potentialviolation']
+   * @example ['violation', 'potentialviolation', 'recommendation']
+   */
+  reportLevels?: string[];
+
   /** Engine-specific options */
   engineOptions?: Record<string, unknown>;
 }
