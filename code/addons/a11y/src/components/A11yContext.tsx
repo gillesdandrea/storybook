@@ -211,6 +211,17 @@ export const A11yContextProvider: FC<PropsWithChildren> = (props) => {
   const handleResult = useCallback(
     (report: NormalizedA11yReport, id: string) => {
       if (storyId === id) {
+        console.log('[A11yContext] Received report from channel:', {
+          engine: report.engine,
+          violationCount: report.violations?.length || 0,
+          firstViolation: report.violations?.[0] ? {
+            id: report.violations[0].id,
+            ruleId: report.violations[0].ruleId,
+            severity: report.violations[0].severity,
+            confidence: report.violations[0].confidence,
+          } : null,
+        });
+        
         // Enrich the normalized report before storing
         const enrichedReport = ReportEnrichmentService.enrich(report);
         setState((prev) => ({ ...prev, status: 'ran', results: enrichedReport }));

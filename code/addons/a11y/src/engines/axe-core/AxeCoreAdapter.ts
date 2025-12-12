@@ -249,11 +249,29 @@ export class AxeCoreAdapter implements IA11yEngine {
 
   /** Convert axe-core results to normalized format */
   private convertResults(axeResults: AxeResults, executionTime: number): A11yReport {
+    console.log('[AxeCoreAdapter] Raw axe-core results:', {
+      violationCount: axeResults.violations.length,
+      passCount: axeResults.passes.length,
+      incompleteCount: axeResults.incomplete.length,
+      violations: axeResults.violations.map(v => ({
+        id: v.id,
+        impact: v.impact,
+        nodes: v.nodes.length,
+      })),
+    });
+
     const violations = axeResults.violations.map((v) => this.convertIssue(v, 'violation'));
-
     const passes = axeResults.passes.map((p) => this.convertIssue(p, 'pass'));
-
     const incomplete = axeResults.incomplete.map((i) => this.convertIssue(i, 'incomplete'));
+
+    console.log('[AxeCoreAdapter] Converted issues:', {
+      violations: violations.map(v => ({
+        id: v.id,
+        ruleId: v.ruleId,
+        severity: v.severity,
+        confidence: v.confidence,
+      })),
+    });
 
     return {
       engine: this.type,
@@ -280,14 +298,23 @@ export class AxeCoreAdapter implements IA11yEngine {
 
   /** Convert a single axe-core result to normalized issue format */
   private convertIssue(result: Result, type: 'violation' | 'pass' | 'incomplete'): A11yIssue {
+    const severity = this.mapSeverity(result.impact, type);
+    const confidence = this.mapConfidence(type);
+    console.log('[AxeCoreAdapter] convertIssue:', {
+      ruleId: result.id,
+      type,
+      impact: result.impact,
+      mappedSeverity: severity,
+      mappedConfidence: confidence,
+    });
     return {
       id: `${result.id}-${type}`,
       ruleId: result.id,
       description: result.description,
       help: result.help,
       helpUrl: result.helpUrl,
-      severity: this.mapSeverity(result.impact, type),
-      confidence: this.mapConfidence(type),
+      severity,
+      confidence,
       tags: result.tags,
       nodes: result.nodes.map((node) => this.convertNode(node)),
       engine: this.type,

@@ -23,9 +23,11 @@ export class ReportEnrichmentService {
    * Enrich a normalized A11yReport with display metadata
    */
   static enrich(report: A11yReport): EnrichedReport {
+    const enrichedViolations = (report.violations || []).map((issue) => this.enrichIssue(issue, report));
+
     return {
       engine: report.engine,
-      violations: (report.violations || []).map((issue) => this.enrichIssue(issue, report)),
+      violations: enrichedViolations,
       warnings: (report.warnings || []).map((issue) => this.enrichIssue(issue, report)),
       passes: (report.passes || []).map((issue) => this.enrichIssue(issue, report)),
       incomplete: (report.incomplete || []).map((issue) => this.enrichIssue(issue, report)),
@@ -39,6 +41,7 @@ export class ReportEnrichmentService {
    */
   private static enrichIssue(issue: A11yIssue, report: A11yReport): EnrichedIssue {
     const nodes = issue.nodes.map((node) => this.enrichNode(node));
+    const displaySeverity = this.mapSeverityToDisplay(issue.severity, issue.confidence);
 
     return {
       id: issue.id,
@@ -46,7 +49,7 @@ export class ReportEnrichmentService {
       displayTitle: this.extractTitle(issue),
       displayDescription: this.extractDescription(issue),
       helpUrl: issue.helpUrl,
-      severity: this.mapSeverityToDisplay(issue.severity, issue.confidence),
+      severity: displaySeverity,
       confidence: this.mapConfidenceToDisplay(issue.confidence),
       tags: issue.tags,
       nodes,

@@ -303,6 +303,9 @@ function convertToAxeResults(report: A11yReport): AxeResults {
     passes: report.passes.map((issue) => convertIssueToResult(issue)),
     incomplete: report.incomplete.map((issue) => convertIssueToResult(issue)),
     inapplicable: [],
+    // Preserve engine and metadata for the manager to display
+    engine: report.engine,
+    metadata: report.metadata,
   } as AxeResults;
 }
 
@@ -324,8 +327,13 @@ function convertIssueToResult(issue: unknown): unknown {
 
   // If we have the original axe-core result stored, use it directly
   // This preserves all axe-specific properties like 'any', 'all', 'none'
+  // But also add normalized severity and confidence for display
   if (issueObj.engineSpecific?.axeResult) {
-    return issueObj.engineSpecific.axeResult;
+    return {
+      ...issueObj.engineSpecific.axeResult,
+      severity: (issueObj as { severity?: string }).severity,
+      confidence: (issueObj as { confidence?: string }).confidence,
+    };
   }
 
   // Fallback: construct a basic result for non-axe engines (e.g., IBM Equal Access)
@@ -333,11 +341,16 @@ function convertIssueToResult(issue: unknown): unknown {
   // But exclude DOM element references that cause circular structure errors
   return {
     id: issueObj.ruleId,
+    ruleId: issueObj.ruleId, // Preserve ruleId field
+    engine: (issueObj as { engine?: string }).engine, // Preserve engine field
     impact: issueObj.engineSpecific?.impact,
     tags: issueObj.tags,
     description: issueObj.description,
     help: issueObj.help,
     helpUrl: issueObj.helpUrl,
+    // Preserve normalized severity and confidence for display
+    severity: (issueObj as { severity?: string }).severity,
+    confidence: (issueObj as { confidence?: string }).confidence,
     nodes: issueObj.nodes?.map((node) => {
       // Create a clean node object without DOM references
       const cleanNode: Record<string, unknown> = {
@@ -411,10 +424,34 @@ channel.on(EVENTS.MANUAL, async (storyId: string, input: A11yParameters = DEFAUL
     }
     
     const result = await run(input, storyId);
+    
+    console.log('[a11yRunner] Result before serialization:', {
+      engine: (result as any).engine || (result as any).testEngine?.name,
+      violationCount: result.violations?.length || 0,
+      firstViolation: result.violations?.[0] ? {
+        id: (result.violations[0] as any).id,
+        ruleId: (result.violations[0] as any).ruleId,
+        severity: (result.violations[0] as any).severity,
+        confidence: (result.violations[0] as any).confidence,
+      } : null,
+    });
+    
     // Axe result contains class instances, which telejson deserializes in a
     // way that violates:
     //  Content Security Policy directive: "script-src 'self' 'unsafe-inline'".
     const resultJson = JSON.parse(JSON.stringify(result));
+    
+    console.log('[a11yRunner] Result after serialization:', {
+      engine: resultJson.engine || resultJson.testEngine?.name,
+      violationCount: resultJson.violations?.length || 0,
+      firstViolation: resultJson.violations?.[0] ? {
+        id: resultJson.violations[0].id,
+        ruleId: resultJson.violations[0].ruleId,
+        severity: resultJson.violations[0].severity,
+        confidence: resultJson.violations[0].confidence,
+      } : null,
+    });
+    
     channel.emit(EVENTS.RESULT, resultJson, storyId);
   } catch (error) {
     channel.emit(EVENTS.ERROR, error);
