@@ -50,14 +50,10 @@ const Title = styled.div(({ theme }) => ({
 }));
 
 const RuleId = styled.div(({ theme }) => ({
-  display: 'none',
   color: theme.textMutedColor,
   fontFamily: theme.typography.fonts.mono,
   fontSize: theme.typography.size.s1,
-
-  '@container (min-width: 800px)': {
-    display: 'block',
-  },
+  display: 'block',
 }));
 
 const Count = styled.div(({ theme }) => ({
@@ -89,16 +85,24 @@ export const Report: FC<ReportProps> = ({
   <>
     {items && items.length ? (
       items.map((item) => {
-        const id = `${type}.${item.ruleId}`;
+        const id = `${type}.${item.id}`;
         const detailsId = `details:${id}`;
         const selection = selectedItems.get(id);
+        console.log('[Report] Rendering item:', {
+          type,
+          itemId: item.id,
+          itemRuleId: item.ruleId,
+          generatedId: id,
+          selection,
+          selectedItemsKeys: Array.from(selectedItems.keys()),
+        });
         return (
-          <Wrapper key={id}>
-            <HeaderBar onClick={(event) => toggleOpen(event, type, item)} data-active={!!selection}>
-              <Title>
-                <strong>{item.displayTitle}</strong>
-                <RuleId>{item.ruleId}</RuleId>
-              </Title>
+            <Wrapper key={id}>
+              <HeaderBar onClick={(event) => toggleOpen(event, type, item)} data-active={!!selection}>
+                <Title>
+                  <strong>{item.displayTitle}</strong>
+                  <RuleId>{item.id}</RuleId>
+                </Title>
               <Badge status={type === RuleType.PASS ? 'neutral' : item.severity.badgeStatus}>
                 {item.severity.label}
               </Badge>

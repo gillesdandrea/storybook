@@ -1,6 +1,6 @@
 import type { A11yEngineType, A11ySeverity } from '../../engines/types';
 import type { A11yRuleMetadata, IA11yRuleProvider, A11yRuleCategory } from '../types';
-import { combinedRulesMap } from '../../AccessibilityRuleMaps';
+import { combinedRulesMap } from '../../engines/axe-core/AccessibilityRuleMaps';
 import type { RuleMetadata } from 'axe-core';
 
 export class AxeCoreRuleProvider implements IA11yRuleProvider {

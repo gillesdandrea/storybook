@@ -62,38 +62,43 @@ export class EqualAccessAdapter implements IA11yEngine {
     }
 
     try {
-      // Import the raw script content using Vite's ?raw suffix
-      // This prevents Vite from processing it as an ES module
-      // @ts-ignore - Vite's ?raw suffix is not recognized by TypeScript
-      const aceRaw = await import('accessibility-checker-engine/ace.js?raw');
-      const scriptContent = aceRaw.default as string;
-      
-      if (!scriptContent) {
-        throw new Error('Failed to load raw script content');
-      }
-      
-      // Create a script element and inject the code
-      // This ensures it executes in the global scope where it can set window.ace
+      // Load the script by creating a script tag that points to the UMD bundle
+      // The accessibility-checker-engine package provides a UMD bundle at ace.js
+      // We need to load it dynamically and let it set window.ace
       const script = document.createElement('script');
-      script.textContent = scriptContent;
-      document.head.appendChild(script);
       
-      // Wait for the script to execute and set globals
-      await new Promise(resolve => setTimeout(resolve, 200));
+      // Use a dynamic import to get the module path, then load it as a script
+      // This works around Vite's module processing
+      const aceModule = await import('accessibility-checker-engine/ace.js');
       
-      // Check if window.ace was set
+      // If the module loaded successfully and set window.ace, we're done
       const globalWindowAfter = window as Window & { ace?: { Checker: typeof Checker } };
       if (globalWindowAfter.ace && globalWindowAfter.ace.Checker) {
         this.scriptLoaded = true;
         console.log('[Storybook A11y] ✓ IBM Equal Access engine loaded');
-        // Clean up the script element
-        document.head.removeChild(script);
         return;
       }
       
-      // Clean up on failure
-      document.head.removeChild(script);
-      throw new Error('Script executed but window.ace not set');
+      // If not, try loading via script tag with the CDN URL as fallback
+      script.src = `https://unpkg.com/accessibility-checker-engine@${this.version}/ace.js`;
+      script.async = true;
+      
+      const loadPromise = new Promise<void>((resolve, reject) => {
+        script.onload = () => {
+          const globalWindowLoaded = window as Window & { ace?: { Checker: typeof Checker } };
+          if (globalWindowLoaded.ace && globalWindowLoaded.ace.Checker) {
+            this.scriptLoaded = true;
+            console.log('[Storybook A11y] ✓ IBM Equal Access engine loaded from CDN');
+            resolve();
+          } else {
+            reject(new Error('Script loaded but window.ace not set'));
+          }
+        };
+        script.onerror = () => reject(new Error('Failed to load script from CDN'));
+      });
+      
+      document.head.appendChild(script);
+      await loadPromise;
     } catch (error) {
       console.error('[Storybook A11y] Failed to load IBM Equal Access engine:', error);
       throw new Error(

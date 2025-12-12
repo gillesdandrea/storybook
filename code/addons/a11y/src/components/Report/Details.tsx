@@ -156,6 +156,15 @@ interface DetailsProps {
 }
 
 export const Details = ({ id, item, type, selection, handleSelectionChange }: DetailsProps) => {
+  console.log('[Details] Rendering details:', {
+    id,
+    itemId: item.id,
+    itemRuleId: item.ruleId,
+    type,
+    selection,
+    nodeCount: item.nodes.length,
+  });
+  
   // Convert the groupedMessages Map to an array for rendering
   const nodeGroups = Array.from(item.groupedMessages.entries()).map(([message, nodes]) => ({
     message,
@@ -172,7 +181,7 @@ export const Details = ({ id, item, type, selection, handleSelectionChange }: De
   return (
     <Wrapper id={id}>
       <Info>
-        <RuleId>{item.ruleId}</RuleId>
+        <RuleId>{item.id}</RuleId>
         <Description>
           {item.displayDescription}{' '}
           {item.helpUrl && (
@@ -200,7 +209,7 @@ export const Details = ({ id, item, type, selection, handleSelectionChange }: De
                     <MessageGroupTitle>{group.message}</MessageGroupTitle>
                   )}
                   {group.nodes.map(({ node, index }) => {
-                    const key = `${type}.${item.ruleId}.${index + 1}`;
+                    const key = `${type}.${item.id}.${index + 1}`;
                     return (
                       <Fragment key={key}>
                         <Tabs.Trigger value={key} asChild>
@@ -219,7 +228,13 @@ export const Details = ({ id, item, type, selection, handleSelectionChange }: De
             ) : (
               // Original flat list for single-message rules
               item.nodes.map((node, index) => {
-                const key = `${type}.${item.ruleId}.${index + 1}`;
+                const key = `${type}.${item.id}.${index + 1}`;
+                console.log('[Details] Creating node item:', {
+                  index,
+                  key,
+                  selection,
+                  matches: key === selection,
+                });
                 return (
                   <Fragment key={key}>
                     <Tabs.Trigger value={key} asChild>
@@ -237,7 +252,7 @@ export const Details = ({ id, item, type, selection, handleSelectionChange }: De
           </Tabs.List>
 
           {item.nodes.map((node, index) => {
-            const key = `${type}.${item.ruleId}.${index + 1}`;
+            const key = `${type}.${item.id}.${index + 1}`;
             return (
               <Tabs.Content key={key} value={key} asChild>
                 <Content side="right">{getContent(node)}</Content>

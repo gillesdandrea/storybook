@@ -16,4 +16,3 @@ export function updateRuleCache(rules: A11yRuleMetadata[]): void {
   initializeRuleCache(rules);
   console.log(`[Storybook A11y] Updated rule cache with ${rules.length} rules from preview`);
 }
-

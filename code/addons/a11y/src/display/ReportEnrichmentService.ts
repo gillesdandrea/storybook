@@ -25,10 +25,10 @@ export class ReportEnrichmentService {
   static enrich(report: A11yReport): EnrichedReport {
     return {
       engine: report.engine,
-      violations: report.violations.map((issue) => this.enrichIssue(issue, report)),
-      warnings: report.warnings.map((issue) => this.enrichIssue(issue, report)),
-      passes: report.passes.map((issue) => this.enrichIssue(issue, report)),
-      incomplete: report.incomplete.map((issue) => this.enrichIssue(issue, report)),
+      violations: (report.violations || []).map((issue) => this.enrichIssue(issue, report)),
+      warnings: (report.warnings || []).map((issue) => this.enrichIssue(issue, report)),
+      passes: (report.passes || []).map((issue) => this.enrichIssue(issue, report)),
+      incomplete: (report.incomplete || []).map((issue) => this.enrichIssue(issue, report)),
       summary: report.summary,
       metadata: report.metadata,
     };
@@ -52,7 +52,7 @@ export class ReportEnrichmentService {
       nodes,
       groupedMessages: this.groupNodesByMessage(nodes),
       engine: issue.engine,
-      engineVersion: report.metadata.engineVersion,
+      engineVersion: report.metadata?.engineVersion,
     };
   }
 

@@ -173,7 +173,8 @@ export const A11yContextProvider: FC<PropsWithChildren> = (props) => {
   const toggleOpen = useCallback(
     (event: React.SyntheticEvent<Element>, type: RuleType, item: EnrichedIssue) => {
       event.stopPropagation();
-      const key = `${type}.${item.ruleId}`;
+      const key = `${type}.${item.id}`;
+      console.log('[A11yContext] toggleOpen:', { type, itemId: item.id, itemRuleId: item.ruleId, key });
       setSelectedItems((prev) => new Map(prev.delete(key) ? prev : prev.set(key, `${key}.1`)));
     },
     []
@@ -188,7 +189,7 @@ export const A11yContextProvider: FC<PropsWithChildren> = (props) => {
       (prev) =>
         new Map(
           results?.[ui.tab]?.map((result) => {
-            const key = `${ui.tab}.${result.ruleId}`;
+            const key = `${ui.tab}.${result.id}`;
             return [key, prev.get(key) ?? `${key}.1`];
           }) ?? []
         )

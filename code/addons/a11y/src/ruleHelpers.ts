@@ -9,7 +9,7 @@
  * 2. Registry mode: Uses A11yRuleRegistry for richer metadata (requires initialization)
  */
 
-import { combinedRulesMap } from './AccessibilityRuleMaps';
+import { combinedRulesMap } from './engines/axe-core/AccessibilityRuleMaps';
 import type { A11yRuleMetadata } from './rules/types';
 import type { EnhancedResult } from './types';
 
@@ -150,4 +150,3 @@ export const isRuleCacheInitialized = (): boolean => {
 // Legacy exports for backward compatibility
 export const getTitleForAxeResult = getRuleTitle;
 export const getFriendlySummaryForAxeResult = getRuleSummary;
-
