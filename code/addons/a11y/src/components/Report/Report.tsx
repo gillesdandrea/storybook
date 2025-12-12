@@ -1,45 +1,15 @@
-import type { ComponentProps, FC } from 'react';
+import type { FC } from 'react';
 import React from 'react';
 
 import { Badge, Button, EmptyTabContent } from 'storybook/internal/components';
 
 import { ChevronSmallDownIcon } from '@storybook/icons';
 
-import type { ImpactValue } from 'axe-core';
 import { styled } from 'storybook/theming';
 
-import { getTitleForAxeResult } from '../../ruleHelpers';
-import { type EnhancedResult, RuleType } from '../../types';
+import { RuleType } from '../../types';
+import type { EnrichedIssue } from '../../display/types';
 import { Details } from './Details';
-
-const impactStatus: Record<NonNullable<ImpactValue>, ComponentProps<typeof Badge>['status']> = {
-  minor: 'neutral',
-  moderate: 'warning',
-  serious: 'negative',
-  critical: 'critical',
-};
-
-const impactLabels: Record<NonNullable<ImpactValue>, string> = {
-  minor: 'Minor',
-  moderate: 'Moderate',
-  serious: 'Serious',
-  critical: 'Critical',
-};
-
-// Extended impact mapping for equal-access engine custom values
-const equalAccessImpactStatus: Record<string, ComponentProps<typeof Badge>['status']> = {
-  violation: 'critical',
-  needsReview: 'warning',
-  recommendation: 'neutral',
-  information: 'neutral',
-};
-
-const equalAccessImpactLabels: Record<string, string> = {
-  violation: 'Violation',
-  needsReview: 'Need Review',
-  recommendation: 'Recommendation',
-  information: 'Information',
-};
 
 const Wrapper = styled.div(({ theme }) => ({
   display: 'flex',
@@ -100,12 +70,12 @@ const Count = styled.div(({ theme }) => ({
 }));
 
 export interface ReportProps {
-  items: EnhancedResult[];
+  items: EnrichedIssue[];
   empty: string;
   type: RuleType;
   handleSelectionChange: (key: string) => void;
-  selectedItems: Map<EnhancedResult['id'], string>;
-  toggleOpen: (event: React.SyntheticEvent<Element>, type: RuleType, item: EnhancedResult) => void;
+  selectedItems: Map<string, string>;
+  toggleOpen: (event: React.SyntheticEvent<Element>, type: RuleType, item: EnrichedIssue) => void;
 }
 
 export const Report: FC<ReportProps> = ({
@@ -119,43 +89,23 @@ export const Report: FC<ReportProps> = ({
   <>
     {items && items.length ? (
       items.map((item) => {
-        const id = `${type}.${item.id}`;
+        const id = `${type}.${item.ruleId}`;
         const detailsId = `details:${id}`;
         const selection = selectedItems.get(id);
-        const title = getTitleForAxeResult(item);
         return (
           <Wrapper key={id}>
             <HeaderBar onClick={(event) => toggleOpen(event, type, item)} data-active={!!selection}>
               <Title>
-                <strong>{title}</strong>
-                <RuleId>{item.id}</RuleId>
+                <strong>{item.displayTitle}</strong>
+                <RuleId>{item.ruleId}</RuleId>
               </Title>
-              {(() => {
-                const impact = item.impact as string | undefined;
-                if (!impact) return null;
-                
-                // Check if this is an equal-access custom impact value
-                if (impact in equalAccessImpactLabels) {
-                  return (
-                    <Badge status={type === RuleType.PASS ? 'neutral' : equalAccessImpactStatus[impact]}>
-                      {equalAccessImpactLabels[impact]}
-                    </Badge>
-                  );
-                }
-                // Otherwise use standard axe-core impact labels
-                if (impact in impactLabels) {
-                  return (
-                    <Badge status={type === RuleType.PASS ? 'neutral' : impactStatus[impact as NonNullable<ImpactValue>]}>
-                      {impactLabels[impact as NonNullable<ImpactValue>]}
-                    </Badge>
-                  );
-                }
-                return null;
-              })()}
+              <Badge status={type === RuleType.PASS ? 'neutral' : item.severity.badgeStatus}>
+                {item.severity.label}
+              </Badge>
               <Count>{item.nodes.length}</Count>
               <Button
                 onClick={(event) => toggleOpen(event, type, item)}
-                ariaLabel={`${selection ? 'Collapse' : 'Expand'} details for: ${title}`}
+                ariaLabel={`${selection ? 'Collapse' : 'Expand'} details for: ${item.displayTitle}`}
                 aria-expanded={!!selection}
                 aria-controls={detailsId}
                 variant="ghost"

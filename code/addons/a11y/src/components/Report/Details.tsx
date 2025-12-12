@@ -1,4 +1,4 @@
-import React, { Fragment, useCallback, useMemo, useState } from 'react';
+import React, { Fragment, useCallback, useState } from 'react';
 
 import { Button, Link, SyntaxHighlighter } from 'storybook/internal/components';
 
@@ -7,8 +7,8 @@ import { CheckIcon, CopyIcon, LocationIcon } from '@storybook/icons';
 import * as Tabs from '@radix-ui/react-tabs';
 import { styled } from 'storybook/theming';
 
-import { getFriendlySummaryForAxeResult } from '../../ruleHelpers';
-import type { EnhancedNodeResult, EnhancedResult, RuleType } from '../../types';
+import type { RuleType } from '../../types';
+import type { EnrichedIssue, DisplayNode } from '../../display/types';
 import { useA11yContext } from '../A11yContext';
 
 const StyledSyntaxHighlighter = styled(SyntaxHighlighter)(
@@ -149,29 +149,22 @@ const CopyButton = ({ onClick }: { onClick: () => void }) => {
 
 interface DetailsProps {
   id: string;
-  item: EnhancedResult;
+  item: EnrichedIssue;
   type: RuleType;
   selection: string | undefined;
   handleSelectionChange: (key: string) => void;
 }
 
 export const Details = ({ id, item, type, selection, handleSelectionChange }: DetailsProps) => {
-  // Group nodes by their specific error message (for Equal Access multi-message rules)
-  const nodeGroups = useMemo(() => {
-    const groups = new Map<string, { message: string; nodes: Array<{ node: EnhancedNodeResult; index: number }> }>();
-    
-    item.nodes.forEach((node, index) => {
-      // Get the specific error message from the node's 'any' array (Equal Access stores it there)
-      const errorMessage = node.any && node.any.length > 0 ? node.any[0].message : '';
-      
-      if (!groups.has(errorMessage)) {
-        groups.set(errorMessage, { message: errorMessage, nodes: [] });
-      }
-      groups.get(errorMessage)!.nodes.push({ node, index });
-    });
-    
-    return Array.from(groups.values());
-  }, [item.nodes]);
+  // Convert the groupedMessages Map to an array for rendering
+  const nodeGroups = Array.from(item.groupedMessages.entries()).map(([message, nodes]) => ({
+    message,
+    nodes: nodes.map((node, index) => ({
+      node,
+      // Find the actual index in the original nodes array
+      index: item.nodes.indexOf(node),
+    })),
+  }));
 
   // Check if we have multiple message groups (Equal Access multi-message scenario)
   const hasMultipleMessages = nodeGroups.length > 1;
@@ -179,12 +172,14 @@ export const Details = ({ id, item, type, selection, handleSelectionChange }: De
   return (
     <Wrapper id={id}>
       <Info>
-        <RuleId>{item.id}</RuleId>
+        <RuleId>{item.ruleId}</RuleId>
         <Description>
-          {getFriendlySummaryForAxeResult(item)}{' '}
-          <Link href={item.helpUrl} target="_blank" rel="noopener noreferrer" withArrow>
-            Learn how to resolve this violation
-          </Link>
+          {item.displayDescription}{' '}
+          {item.helpUrl && (
+            <Link href={item.helpUrl} target="_blank" rel="noopener noreferrer" withArrow>
+              Learn how to resolve this violation
+            </Link>
+          )}
         </Description>
       </Info>
 
@@ -205,7 +200,7 @@ export const Details = ({ id, item, type, selection, handleSelectionChange }: De
                     <MessageGroupTitle>{group.message}</MessageGroupTitle>
                   )}
                   {group.nodes.map(({ node, index }) => {
-                    const key = `${type}.${item.id}.${index + 1}`;
+                    const key = `${type}.${item.ruleId}.${index + 1}`;
                     return (
                       <Fragment key={key}>
                         <Tabs.Trigger value={key} asChild>
@@ -224,7 +219,7 @@ export const Details = ({ id, item, type, selection, handleSelectionChange }: De
             ) : (
               // Original flat list for single-message rules
               item.nodes.map((node, index) => {
-                const key = `${type}.${item.id}.${index + 1}`;
+                const key = `${type}.${item.ruleId}.${index + 1}`;
                 return (
                   <Fragment key={key}>
                     <Tabs.Trigger value={key} asChild>
@@ -242,7 +237,7 @@ export const Details = ({ id, item, type, selection, handleSelectionChange }: De
           </Tabs.List>
 
           {item.nodes.map((node, index) => {
-            const key = `${type}.${item.id}.${index + 1}`;
+            const key = `${type}.${item.ruleId}.${index + 1}`;
             return (
               <Tabs.Content key={key} value={key} asChild>
                 <Content side="right">{getContent(node)}</Content>
@@ -255,33 +250,25 @@ export const Details = ({ id, item, type, selection, handleSelectionChange }: De
   );
 };
 
-function getContent(node: EnhancedNodeResult) {
+function getContent(node: DisplayNode) {
   const { handleCopyLink, handleJumpToElement } = useA11yContext();
-  const { any, all, none, html, target } = node;
-  const rules = [...any, ...all, ...none];
+  const { messages, html, selector, linkPath } = node;
+  
   return (
     <>
       <Messages>
-        {rules.map((rule) => (
-          <div key={rule.id}>
-            {`${rule.message}${/(\.|: [^.]+\.*)$/.test(rule.message) ? '' : '.'}`}
+        {messages.map((message) => (
+          <div key={message.id}>
+            {`${message.text}${/(\.|: [^.]+\.*)$/.test(message.text) ? '' : '.'}`}
           </div>
         ))}
       </Messages>
 
       <Actions>
-        <Button ariaLabel={false} onClick={() => {
-          // Convert target to string - handle both string and ShadowDomSelector types
-          const targetSelector = Array.isArray(node.target)
-            ? node.target[0]
-            : typeof node.target === 'string'
-              ? node.target
-              : (node.target as any)?.selector || String(node.target);
-          handleJumpToElement(targetSelector);
-        }}>
+        <Button ariaLabel={false} onClick={() => handleJumpToElement(selector)}>
           <LocationIcon /> Jump to element
         </Button>
-        <CopyButton onClick={() => handleCopyLink(node.linkPath)} />
+        {linkPath && <CopyButton onClick={() => handleCopyLink(linkPath)} />}
       </Actions>
 
       {/* Technically this is HTML but we use JSX to avoid using an HTML comment */}
@@ -294,7 +281,7 @@ function getContent(node: EnhancedNodeResult) {
       <StyledSyntaxHighlighter
         language="css"
         wrapLongLines
-      >{`/* selector */\n${target} {}`}</StyledSyntaxHighlighter>
+      >{`/* selector */\n${selector} {}`}</StyledSyntaxHighlighter>
     </>
   );
 }
