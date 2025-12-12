@@ -423,8 +423,6 @@ export class EqualAccessAdapter implements IA11yEngine {
         reasonId: issue.reasonId,
         category: issue.category,
         equalAccessIssue: issue,
-        // Store severity as impact for backward compatibility with Report component
-        impact: this.mapSeverityToImpact(this.mapSeverity(policy, confidence)),
       },
     };
   }
@@ -440,8 +438,7 @@ export class EqualAccessAdapter implements IA11yEngine {
       target: cssSelector ? [cssSelector] : [],
       xpath: issue.path.xpath || issue.path.dom || undefined,
       bounds: issue.bounds,
-      // Add axe-core compatibility properties for Details component
-      // Store the specific error message in the 'any' array so Details can display it
+      // Store the specific error message for enrichment service to extract
       any: [{
         id: String(issue.reasonId || issue.ruleId),
         message: specificMessage,
@@ -586,23 +583,6 @@ export class EqualAccessAdapter implements IA11yEngine {
     return 'recommendation';
   }
 
-  /** Map normalized severity to custom impact values for equal-access display */
-  private mapSeverityToImpact(severity: A11ySeverity): string {
-    // Use custom impact values that will be recognized by the Report component
-    // These map directly to the severity labels we want to display
-    switch (severity) {
-      case A11ySeverity.VIOLATION:
-        return 'violation';
-      case A11ySeverity.WARNING:
-        return 'needsReview';
-      case A11ySeverity.RECOMMENDATION:
-        return 'recommendation';
-      case A11ySeverity.INFORMATION:
-        return 'information';
-      default:
-        return 'information';
-    }
-  }
 
   /** Get help URL for a rule */
   private getHelpUrl(issue: EqualAccessIssue): string {
