@@ -17,6 +17,8 @@ export interface DisplaySeverity {
   level: 'critical' | 'high' | 'medium' | 'low' | 'info';
   /** Human-readable label */
   label: string;
+  /** Engine-specific severity label (e.g., "Serious" from axe-core, "Potential Violation" from equal-access) */
+  engineLabel?: string;
   /** Badge component status prop */
   badgeStatus: ComponentProps<typeof Badge>['status'];
   /** Color for custom styling */

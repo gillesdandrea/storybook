@@ -300,10 +300,21 @@ export class AxeCoreAdapter implements IA11yEngine {
   private convertIssue(result: Result, type: 'violation' | 'pass' | 'incomplete'): A11yIssue {
     const severity = this.mapSeverity(result.impact, type);
     const confidence = this.mapConfidence(type);
+    
+    // For passes and incomplete, get the rule's potential impact from metadata if not present
+    let ruleImpact = result.impact;
+    if ((type === 'pass' || type === 'incomplete') && !ruleImpact && this.axe) {
+      const ruleMetadata = this.axe.getRules().find(r => r.ruleId === result.id);
+      if (ruleMetadata) {
+        ruleImpact = (ruleMetadata as RuleMetadata & { impact?: ImpactValue }).impact;
+      }
+    }
+    
     console.log('[AxeCoreAdapter] convertIssue:', {
       ruleId: result.id,
       type,
       impact: result.impact,
+      ruleImpact,
       mappedSeverity: severity,
       mappedConfidence: confidence,
     });
@@ -319,10 +330,33 @@ export class AxeCoreAdapter implements IA11yEngine {
       nodes: result.nodes.map((node) => this.convertNode(node)),
       engine: this.type,
       engineSpecific: {
-        impact: result.impact,
+        impact: ruleImpact || result.impact,
         axeResult: result,
+        // Store original severity for display - use rule impact for passes and incomplete
+        originalSeverity: this.getOriginalSeverityLabel(ruleImpact, type),
       },
     };
+  }
+
+  /** Get the original engine-specific severity label */
+  private getOriginalSeverityLabel(impact: ImpactValue | undefined | null, type: string): string {
+    // Return axe-core's original impact labels with proper capitalization
+    // For passes and incomplete, show the rule's potential impact (what it would be if it failed)
+    switch (impact) {
+      case 'critical':
+        return 'Critical';
+      case 'serious':
+        return 'Serious';
+      case 'moderate':
+        return 'Moderate';
+      case 'minor':
+        return 'Minor';
+      default:
+        // Fallback labels when impact is not available
+        if (type === 'incomplete') return 'Needs Review';
+        if (type === 'pass') return 'Pass';
+        return 'Unknown';
+    }
   }
 
   /** Convert axe-core node to normalized format */

@@ -95,6 +95,9 @@ export const Report: FC<ReportProps> = ({
           generatedId: id,
           selection,
           selectedItemsKeys: Array.from(selectedItems.keys()),
+          severity: item.severity,
+          engineLabel: item.severity.engineLabel,
+          label: item.severity.label,
         });
         return (
             <Wrapper key={id}>
@@ -103,9 +106,11 @@ export const Report: FC<ReportProps> = ({
                   <strong>{item.displayTitle}</strong>
                   <RuleId>{item.id}</RuleId>
                 </Title>
-              <Badge status={type === RuleType.PASS ? 'neutral' : item.severity.badgeStatus}>
-                {item.severity.label}
-              </Badge>
+              {type !== RuleType.PASS && (
+                <Badge status={item.severity.badgeStatus}>
+                  {item.severity.engineLabel || item.severity.label}
+                </Badge>
+              )}
               <Count>{item.nodes.length}</Count>
               <Button
                 onClick={(event) => toggleOpen(event, type, item)}

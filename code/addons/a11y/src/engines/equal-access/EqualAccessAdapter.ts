@@ -331,7 +331,7 @@ export class EqualAccessAdapter implements IA11yEngine {
     
     const violationIssues = allIssues.filter(
       (i: A11yIssue) =>
-        i.severity === A11ySeverity.VIOLATION &&
+        (i.severity === A11ySeverity.VIOLATION || i.severity === A11ySeverity.RECOMMENDATION) &&
         i.confidence !== A11yConfidence.POTENTIAL &&
         i.confidence !== A11yConfidence.MANUAL
     );
@@ -428,8 +428,47 @@ export class EqualAccessAdapter implements IA11yEngine {
         reasonId: issue.reasonId,
         category: issue.category,
         equalAccessIssue: issue,
+        // Store original severity for display
+        originalSeverity: this.getOriginalSeverityLabel(policy, confidence),
       },
     };
+  }
+
+  /** Get the original engine-specific severity label */
+  private getOriginalSeverityLabel(policy: EqualAccessPolicy, confidence: EqualAccessConfidence): string {
+    // For PASS results
+    if (confidence === EqualAccessConfidence.PASS) {
+      return 'Pass';
+    }
+    
+    // For MANUAL results
+    if (confidence === EqualAccessConfidence.MANUAL) {
+      return 'Needs Review';
+    }
+    
+    // For POTENTIAL results, combine with policy
+    if (confidence === EqualAccessConfidence.POTENTIAL) {
+      switch (policy) {
+        case EqualAccessPolicy.VIOLATION:
+          return 'Potential Violation';
+        case EqualAccessPolicy.RECOMMENDATION:
+          return 'Potential Recommendation';
+        default:
+          return 'Potential';
+      }
+    }
+    
+    // For FAIL results, use the policy
+    switch (policy) {
+      case EqualAccessPolicy.VIOLATION:
+        return 'Violation';
+      case EqualAccessPolicy.RECOMMENDATION:
+        return 'Recommendation';
+      case EqualAccessPolicy.INFORMATION:
+        return 'Information';
+      default:
+        return 'Unknown';
+    }
   }
 
   /** Convert IBM Equal Access issue node to normalized format */

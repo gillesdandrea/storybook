@@ -333,6 +333,7 @@ function convertIssueToResult(issue: unknown): unknown {
       ...issueObj.engineSpecific.axeResult,
       severity: (issueObj as { severity?: string }).severity,
       confidence: (issueObj as { confidence?: string }).confidence,
+      engineSpecific: issueObj.engineSpecific,
     };
   }
 
@@ -449,6 +450,7 @@ channel.on(EVENTS.MANUAL, async (storyId: string, input: A11yParameters = DEFAUL
         ruleId: resultJson.violations[0].ruleId,
         severity: resultJson.violations[0].severity,
         confidence: resultJson.violations[0].confidence,
+        engineSpecific: resultJson.violations[0].engineSpecific,
       } : null,
     });
     

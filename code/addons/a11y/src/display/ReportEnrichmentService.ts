@@ -14,6 +14,11 @@ import type {
   EnrichedReport,
 } from './types';
 
+const COLOR_RED = '#fa4d56';
+const COLOR_ORANGE = '#ff832b';
+const COLOR_YELLOW = '#f1c21b';
+const COLOR_BLUE = '#4589ff';
+
 /**
  * Service for enriching normalized A11yReport with display-specific metadata
  * This is the single transformation point from engine data to display data
@@ -41,7 +46,7 @@ export class ReportEnrichmentService {
    */
   private static enrichIssue(issue: A11yIssue, report: A11yReport): EnrichedIssue {
     const nodes = issue.nodes.map((node) => this.enrichNode(node));
-    const displaySeverity = this.mapSeverityToDisplay(issue.severity, issue.confidence);
+    const displaySeverity = this.mapSeverityToDisplay(issue.severity, issue.confidence, issue.engineSpecific);
 
     return {
       id: issue.id,
@@ -96,13 +101,98 @@ export class ReportEnrichmentService {
    */
   private static mapSeverityToDisplay(
     severity: A11ySeverity,
-    confidence: A11yConfidence
+    confidence: A11yConfidence,
+    engineSpecific?: Record<string, unknown>
   ): DisplaySeverity {
+    // Extract engine-specific severity label if available
+    const engineLabel = engineSpecific?.originalSeverity as string | undefined;
+
+    // For IBM Equal Access, use engine-specific color mapping
+    if (engineLabel) {
+      // Manual confidence - yellow
+      if (confidence === 'manual') {
+        return {
+          level: 'medium',
+          label: 'Needs Review',
+          engineLabel,
+          badgeStatus: 'warning',
+          color: COLOR_YELLOW,
+          description: 'This issue requires manual verification',
+        };
+      }
+
+      // // Violation or Potential Violation - red
+      // if (engineLabel === 'Violation' || engineLabel === 'Potential Violation') {
+      //   return {
+      //     level: 'critical',
+      //     label: severity === 'violation' ? 'Violation' : 'Needs Review',
+      //     engineLabel,
+      //     badgeStatus: 'critical',
+      //     color: COLOR_RED,
+      //     description: engineLabel === 'Violation'
+      //       ? 'This is a definite accessibility violation'
+      //       : 'This is a potential violation requiring review',
+      //   };
+      // }
+
+      // Violation Violation - red
+      if (engineLabel === 'Violation') {
+        return {
+          level: 'critical',
+          label: 'Violation',
+          engineLabel,
+          badgeStatus: 'critical',
+          color: COLOR_RED,
+          description: 'This is a definite accessibility violation',
+        };
+      }
+
+      // Violation or Potential Violation - red
+      if (engineLabel === 'Potential Violation') {
+        return {
+          level: 'high',
+          label: 'Needs Review',
+          engineLabel,
+          badgeStatus: 'critical',
+          color: COLOR_ORANGE,
+          description: 'This is a potential violation requiring review',
+        };
+      }
+
+      // Recommendation or Potential Recommendation - blue
+      if (engineLabel === 'Recommendation' || engineLabel === 'Potential Recommendation') {
+        return {
+          level: 'low',
+          label: 'Recommendation',
+          engineLabel,
+          badgeStatus: 'neutral',
+          color: COLOR_BLUE,
+          description: engineLabel === 'Recommendation'
+            ? 'This is a best practice recommendation'
+            : 'This is a potential recommendation requiring review',
+        };
+      }
+
+      // Needs Review (catch-all for manual) - yellow
+      if (engineLabel === 'Needs Review') {
+        return {
+          level: 'medium',
+          label: 'Needs Review',
+          engineLabel,
+          badgeStatus: 'warning',
+          color: COLOR_YELLOW,
+          description: 'This issue requires manual verification',
+        };
+      }
+    }
+
+    // Default mapping for axe-core and fallback
     // Handle uncertain results first (potential/manual)
     if (confidence === 'potential' || confidence === 'manual') {
       return {
         level: 'medium',
         label: 'Needs Review',
+        engineLabel,
         badgeStatus: 'warning',
         color: '#FFA500',
         description: 'This issue requires manual verification',
@@ -115,14 +205,16 @@ export class ReportEnrichmentService {
         return {
           level: 'critical',
           label: 'Violation',
+          engineLabel,
           badgeStatus: 'critical',
-          color: '#FF4785',
+          color: COLOR_RED,
           description: 'This is a definite accessibility violation',
         };
       case 'warning':
         return {
           level: 'high',
           label: 'Warning',
+          engineLabel,
           badgeStatus: 'negative',
           color: '#FC521F',
           description: 'This is likely an accessibility issue',
@@ -131,14 +223,16 @@ export class ReportEnrichmentService {
         return {
           level: 'low',
           label: 'Recommendation',
+          engineLabel,
           badgeStatus: 'neutral',
-          color: '#999999',
+          color: '#1EA7FD', // Blue
           description: 'This is a best practice recommendation',
         };
       case 'information':
         return {
           level: 'info',
           label: 'Information',
+          engineLabel,
           badgeStatus: 'neutral',
           color: '#999999',
           description: 'This is informational',
@@ -147,6 +241,7 @@ export class ReportEnrichmentService {
         return {
           level: 'info',
           label: 'Information',
+          engineLabel,
           badgeStatus: 'neutral',
           color: '#999999',
           description: 'This is informational',

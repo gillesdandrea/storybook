@@ -418,32 +418,32 @@ export default definePreview({
       // Switch between engines: 'axe-core' (default) or 'equal-access'
       
       // Axe-core configuration (commented out for easy switching)
-      engine: 'axe-core',
-      config: {
-        rules: {
-          'color-contrast': { enabled: true },
-          'landmark-one-main': { enabled: true }
-        },
-      },
+      // engine: 'axe-core',
+      // config: {
+      //   rules: {
+      //     'color-contrast': { enabled: true },
+      //     'landmark-one-main': { enabled: true }
+      //   },
+      // },
       
       // IBM Equal Access configuration
-      // engine: 'equal-access',
-      // config: {
-      //   // Specify accessibility policies/guidelines to test against
-      //   policies: ['IBM_Accessibility'],
-      //   // Other available policies: 'WCAG_2_1', 'WCAG_2_0'
-      //   // You can also use multiple: policies: ['IBM_Accessibility', 'WCAG_2_1']
+      engine: 'equal-access',
+      config: {
+        // Specify accessibility policies/guidelines to test against
+        policies: ['IBM_Accessibility'],
+        // Other available policies: 'WCAG_2_1', 'WCAG_2_0'
+        // You can also use multiple: policies: ['IBM_Accessibility', 'WCAG_2_1']
         
-      //   // Filter results by report level (optional)
-      //   // Default: ['violation', 'potentialviolation']
-      //   // Available: 'violation', 'potentialviolation', 'recommendation', 'potentialrecommendation', 'manual'
-      //   reportLevels: ['violation', 'potentialviolation', 'recommendation', 'potentialrecommendation', 'manual'],
-      //   // reportLevels: ['violation', 'potentialviolation'],
+        // Filter results by report level (optional)
+        // Default: ['violation', 'potentialviolation']
+        // Available: 'violation', 'potentialviolation', 'recommendation', 'potentialrecommendation', 'manual'
+        reportLevels: ['violation', 'potentialviolation', 'recommendation', 'potentialrecommendation', 'manual'],
+        // reportLevels: ['violation', 'potentialviolation'],
         
-      //   rules: {
-      //     'aria_content_in_landmark': { enabled: true }
-      //   }
-      // },
+        rules: {
+          'aria_content_in_landmark': { enabled: true }
+        }
+      },
     },
   },
 });
